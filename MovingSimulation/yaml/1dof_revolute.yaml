@@ -1,0 +1,15 @@
+robot_info:  # "obot_info"에서 "robot_info"로 수정
+  name: 1DOF_Revolute_Robot
+  description: Simple 1-DOF revolute joint robot (default configuration)
+  dof: 1
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 30.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Single revolute joint with 30cm link

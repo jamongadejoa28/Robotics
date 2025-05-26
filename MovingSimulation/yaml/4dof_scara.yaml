@@ -1,0 +1,33 @@
+robot_info:
+  name: 4DOF_SCARA_Robot
+  description: 4-DOF SCARA (Selective Compliance Assembly Robot Arm)
+  dof: 4
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 35.0
+      alpha: 0.0
+      d: 20.0
+      theta: 0.0
+      description: First horizontal arm
+    - link_number: 2
+      a: 25.0
+      alpha: 180.0
+      d: 0.0
+      theta: 0.0
+      description: Second horizontal arm
+    - link_number: 3
+      a: 0.0
+      alpha: 0.0
+      d: 15.0
+      theta: 0.0
+      description: Vertical axis (prismatic equivalent)
+    - link_number: 4
+      a: 0.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: End-effector rotation

@@ -1,0 +1,27 @@
+robot_info:
+  name: 3DOF_Anthropomorphic_Arm
+  description: 3-DOF anthropomorphic robot arm with human-like structure
+  dof: 3
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 0.0
+      alpha: 90.0
+      d: 15.0
+      theta: 0.0
+      description: Base rotation joint (shoulder yaw)
+    - link_number: 2
+      a: 35.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Upper arm (shoulder pitch)
+    - link_number: 3
+      a: 25.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Forearm (elbow pitch)

@@ -1,0 +1,21 @@
+robot_info:
+  name: 2DOF_Planar_Robot
+  description: Simple 2-DOF planar manipulator similar to SCARA arm
+  dof: 2
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 40.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: First arm segment (shoulder to elbow)
+    - link_number: 2
+      a: 30.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Second arm segment (elbow to end-effector)

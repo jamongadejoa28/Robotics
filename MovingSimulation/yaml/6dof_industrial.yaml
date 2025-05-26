@@ -1,0 +1,45 @@
+robot_info:
+  name: 6DOF_Industrial_Robot
+  description: 6-DOF industrial robot arm similar to PUMA configuration
+  dof: 6
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 0.0
+      alpha: 90.0
+      d: 15.0
+      theta: 0.0
+      description: Base rotation (waist)
+    - link_number: 2
+      a: 25.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Shoulder link
+    - link_number: 3
+      a: 3.0
+      alpha: 90.0
+      d: 0.0
+      theta: 0.0
+      description: Elbow offset
+    - link_number: 4
+      a: 0.0
+      alpha: -90.0
+      d: 22.0
+      theta: 0.0
+      description: Wrist yaw
+    - link_number: 5
+      a: 0.0
+      alpha: 90.0
+      d: 0.0
+      theta: 0.0
+      description: Wrist pitch
+    - link_number: 6
+      a: 0.0
+      alpha: 0.0
+      d: 6.0
+      theta: 0.0
+      description: Wrist roll (end-effector)

@@ -1,0 +1,39 @@
+robot_info:
+  name: 5DOF_Articulated_Arm
+  description: 5-DOF articulated robot arm with wrist joints
+  dof: 5
+  created_date: 2025-01-01 12:00:00
+
+dh_parameters:
+  format: a (cm), alpha (deg), d (cm), theta (deg)
+  links:
+    - link_number: 1
+      a: 0.0
+      alpha: 90.0
+      d: 18.0
+      theta: 0.0
+      description: Base rotation
+    - link_number: 2
+      a: 30.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Shoulder link
+    - link_number: 3
+      a: 25.0
+      alpha: 0.0
+      d: 0.0
+      theta: 0.0
+      description: Elbow link
+    - link_number: 4
+      a: 0.0
+      alpha: 90.0
+      d: 20.0
+      theta: 0.0
+      description: Wrist pitch
+    - link_number: 5
+      a: 0.0
+      alpha: 0.0
+      d: 8.0
+      theta: 0.0
+      description: Wrist roll

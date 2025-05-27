@@ -1,12 +1,11 @@
 """
-Robot Kinematics Simulation Program - 핵심 문제 해결 버전
-메인 실행 파일 - MovingSimulation/main.py (4개 핵심 문제 해결)
+Robot Kinematics Simulation Program - 스크롤 및 반응형 구조 개선 버전
+메인 실행 파일 - MovingSimulation/main.py
 
-해결된 문제들:
-1. ✅ 상태창 텍스트 줄간격 문제 완전 해결
-2. ✅ Auto Update 코드 완전 제거 (더 직관적인 Calculate 버튼으로 대체)
-3. ✅ 목표점 위치와 시뮬레이션 정확성 추적 시스템 구축
-4. ✅ 시뮬레이션 초기화 및 시각적 동작 일관성 보장
+개선사항:
+1. DOF 변경시 상태창 메시지 초기화 추가
+2. 컨트롤 패널 스크롤 기능 및 반응형 구조 구현
+3. 패널 크기 조절시 내부 요소들의 적응적 크기 조정
 """
 
 import sys
@@ -34,10 +33,11 @@ from utils import Utils
 
 class RobotSimulationGUI:
     def __init__(self, root):
-        """로봇 시뮬레이션 GUI 초기화 - 핵심 문제 해결 버전"""
+        """로봇 시뮬레이션 GUI 초기화 - 스크롤 및 반응형 구조 개선 버전"""
         self.root = root
-        self.root.title("Robot Kinematics Simulation - 핵심 문제 해결 버전")
-        self.root.geometry("1600x1000")
+        self.root.title("Robot Kinematics Simulation - 스크롤 및 반응형 구조 개선 버전")
+        self.root.geometry("1700x1000")
+        self.root.minsize(1400, 800)  # 최소 크기 설정
         
         # 핵심 클래스 초기화
         self.robot_kinematics = RobotKinematics()
@@ -55,7 +55,7 @@ class RobotSimulationGUI:
         self.dh_params = []
         self.simulation_running = False
         
-        # 문제 3 해결: 정확성 추적을 위한 정밀한 허용 오차 설정
+        # 정확성 추적을 위한 정밀한 허용 오차 설정
         self.position_tolerance_mm = 5.0  # 5mm 허용 오차
         self.angle_tolerance_deg = 0.5    # 0.5도 허용 오차
         
@@ -71,7 +71,7 @@ class RobotSimulationGUI:
         self.current_path = None
         self.trajectory_history = []
         
-        # 문제 4 해결: 시각적 상태 관리
+        # 시각적 상태 관리
         self.simulation_state = {
             'is_first_run': True,
             'last_target_position': None,
@@ -83,12 +83,22 @@ class RobotSimulationGUI:
         self.dh_frame = None
         self.dh_entries = {}
         self.dh_buttons = {}
-        self.ik_solutions_frame = None
         self.joint_frame = None
         self.target_frame = None
         self.input_entries = {}
         self.input_buttons = {}
         self.result_text = None
+        
+        # IK Solutions 관련 위젯들
+        self.ik_solutions_container = None
+        self.ik_solutions_frame = None
+        self.ik_solutions_scrollable_frame = None
+        self.ik_solutions_canvas = None
+        
+        # 스크롤 가능한 컨트롤 패널 관련 변수들
+        self.control_canvas = None
+        self.control_scrollable_frame = None
+        self.control_scrollbar = None
         
         # 컨트롤 위젯들
         self.control_widgets = []
@@ -102,106 +112,217 @@ class RobotSimulationGUI:
         self.setup_robot_visualization()
         self.load_initial_configuration()
         
+        # 반응형 구조를 위한 이벤트 바인딩
+        self.setup_responsive_bindings()
+        
     def setup_gui(self):
-        self.root.geometry("1700x1000")  # 기존 1600에서 1700으로 증가
+        """GUI 설정 - 스크롤 및 반응형 구조 적용"""
+        # 메인 PanedWindow - 좌우 분할 (반응형)
+        self.main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # 메인 PanedWindow - 좌우 분할
-        main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # 좌측 컨트롤 패널
-        control_frame = ttk.Frame(main_paned)
-        main_paned.add(control_frame)
+        # 좌측 스크롤 가능한 컨트롤 패널
+        self.setup_scrollable_control_panel()
         
         # 우측 시각화 패널
-        viz_frame = ttk.Frame(main_paned)
-        main_paned.add(viz_frame)
+        viz_frame = ttk.Frame(self.main_paned)
+        self.main_paned.add(viz_frame, weight=3)  # 가중치 설정으로 반응형 구현
         
-        # 각 패널 설정
-        self.setup_control_panel(control_frame)
+        # 시각화 패널 설정
         self.setup_visualization_panel(viz_frame)
         
-        # 핵심: GUI가 완전히 로드된 후 분할 위치를 강제로 설정
+        # 초기 패널 크기 설정을 지연 실행
         self.root.after(100, self.set_initial_panel_sizes)
 
+    def setup_scrollable_control_panel(self):
+        """스크롤 가능한 컨트롤 패널 설정"""
+        # 컨트롤 패널 컨테이너 (고정 크기)
+        control_container = ttk.Frame(self.main_paned)
+        self.main_paned.add(control_container, weight=1)  # 가중치 설정
+        
+        # Canvas와 Scrollbar를 위한 프레임
+        canvas_frame = ttk.Frame(control_container)
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 스크롤바 생성
+        self.control_scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical")
+        self.control_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Canvas 생성 (스크롤 가능한 영역)
+        self.control_canvas = tk.Canvas(
+            canvas_frame, 
+            yscrollcommand=self.control_scrollbar.set,
+            highlightthickness=0  # 경계선 제거
+        )
+        self.control_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Scrollbar와 Canvas 연결
+        self.control_scrollbar.config(command=self.control_canvas.yview)
+        
+        # 스크롤 가능한 프레임 생성 (실제 컨텐츠가 들어갈 곳)
+        self.control_scrollable_frame = ttk.Frame(self.control_canvas)
+        
+        # Canvas에 스크롤 가능한 프레임 추가
+        self.canvas_window = self.control_canvas.create_window(
+            (0, 0), 
+            window=self.control_scrollable_frame, 
+            anchor="nw"
+        )
+        
+        # 스크롤 영역 업데이트를 위한 바인딩
+        self.control_scrollable_frame.bind(
+            "<Configure>",
+            self.on_control_frame_configure
+        )
+        
+        # Canvas 크기 변경시 내부 프레임 크기도 조정 (반응형)
+        self.control_canvas.bind(
+            "<Configure>",
+            self.on_control_canvas_configure
+        )
+        
+        # 마우스 휠 스크롤 지원
+        self.setup_mouse_wheel_scrolling()
+        
+        # 실제 컨트롤 요소들을 스크롤 가능한 프레임에 추가
+        self.setup_control_content(self.control_scrollable_frame)
+
+    def on_control_frame_configure(self, event):
+        """스크롤 가능한 프레임 크기 변경시 스크롤 영역 업데이트"""
+        # Canvas의 스크롤 영역을 프레임 크기에 맞게 조정
+        self.control_canvas.configure(scrollregion=self.control_canvas.bbox("all"))
+        
+    def on_control_canvas_configure(self, event):
+        """Canvas 크기 변경시 내부 프레임 너비를 Canvas 너비에 맞게 조정 (반응형)"""
+        canvas_width = event.width
+        # 내부 프레임의 너비를 Canvas 너비에 맞게 설정
+        self.control_canvas.itemconfig(self.canvas_window, width=canvas_width)
+
+    def setup_mouse_wheel_scrolling(self):
+        """마우스 휠 스크롤 기능 설정"""
+        def on_mousewheel(event):
+            # 스크롤 가능한 영역에서만 작동하도록 제한
+            if self.control_canvas.winfo_exists():
+                self.control_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        # Canvas와 하위 위젯들에 마우스 휠 이벤트 바인딩
+        def bind_to_mousewheel(widget):
+            widget.bind("<MouseWheel>", on_mousewheel)
+            for child in widget.winfo_children():
+                bind_to_mousewheel(child)
+        
+        # 초기 바인딩
+        self.root.after(500, lambda: bind_to_mousewheel(self.control_scrollable_frame))
+
+    def setup_responsive_bindings(self):
+        """반응형 구조를 위한 이벤트 바인딩"""
+        # 윈도우 크기 변경시 적응적 조정
+        self.root.bind("<Configure>", self.on_window_resize)
+        
+        # PanedWindow 구분선 이동시 내부 요소 크기 조정
+        self.main_paned.bind("<ButtonRelease-1>", self.on_paned_resize)
+
+    def on_window_resize(self, event):
+        """윈도우 크기 변경시 처리 (반응형)"""
+        # 윈도우 자체의 크기 변경에만 반응 (하위 위젯 제외)
+        if event.widget == self.root:
+            # 스크롤 영역 업데이트
+            self.root.after(100, self.update_scroll_region)
+            
+    def on_paned_resize(self, event):
+        """PanedWindow 크기 조정시 처리"""
+        # 스크롤 영역 업데이트
+        self.root.after(50, self.update_scroll_region)
+
+    def update_scroll_region(self):
+        """스크롤 영역 업데이트"""
+        if hasattr(self, 'control_canvas') and self.control_canvas.winfo_exists():
+            # 스크롤 영역을 현재 내용에 맞게 조정
+            self.control_canvas.configure(scrollregion=self.control_canvas.bbox("all"))
+
     def set_initial_panel_sizes(self):
-        """초기 패널 크기를 강제로 설정"""
+        """초기 패널 크기를 적응적으로 설정"""
         try:
-            # PanedWindow 찾기
-            for child in self.root.winfo_children():
-                if isinstance(child, ttk.PanedWindow):
-                    # 첫 번째 패널(컨트롤 패널)을 500픽셀로 고정
-                    child.sashpos(0, 500)  # 0번째 구분선을 500픽셀 위치에 설정
-                    break
+            # 전체 너비의 30%를 컨트롤 패널로, 70%를 시각화 패널로 할당
+            total_width = self.root.winfo_width()
+            control_width = int(total_width * 0.3)
+            control_width = max(control_width, 400)  # 최소 400픽셀 보장
+            control_width = min(control_width, 600)  # 최대 600픽셀 제한
+            
+            self.main_paned.sashpos(0, control_width)
         except:
-            pass  # 오류가 발생해도 프로그램은 계속 실행
-    def setup_control_panel(self, parent):
-        """컨트롤 패널 설정"""
+            # 기본값으로 대체
+            self.main_paned.sashpos(0, 500)
+
+    def setup_control_content(self, parent):
+        """컨트롤 패널 내용 설정 (스크롤 가능한 프레임 내부)"""
         # 로봇 구성 섹션
         type_frame = ttk.LabelFrame(parent, text="Robot Configuration")
-        type_frame.pack(fill=tk.X, pady=5)
+        type_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(type_frame)
         
-        # 로봇 타입 선택
-        ttk.Label(type_frame, text="Mode:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        # 로봇 타입 선택 (반응형 그리드)
+        config_grid_frame = ttk.Frame(type_frame)
+        config_grid_frame.pack(fill=tk.X, padx=5, pady=5)
+        config_grid_frame.columnconfigure(1, weight=1)  # 두 번째 열 확장 가능
+        
+        ttk.Label(config_grid_frame, text="Mode:").grid(row=0, column=0, sticky="w", padx=(0,5), pady=2)
         self.type_var = tk.StringVar(value="Forward")
-        type_combo = ttk.Combobox(type_frame, textvariable=self.type_var, 
-                                 values=["Forward", "Inverse"], state="readonly", width=15)
-        type_combo.grid(row=0, column=1, padx=5, pady=2)
+        type_combo = ttk.Combobox(config_grid_frame, textvariable=self.type_var, 
+                                 values=["Forward", "Inverse"], state="readonly")
+        type_combo.grid(row=0, column=1, sticky="ew", padx=(0,5), pady=2)
         type_combo.bind('<<ComboboxSelected>>', self.on_robot_type_change)
         
         # DOF 선택
-        ttk.Label(type_frame, text="DOF:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Label(config_grid_frame, text="DOF:").grid(row=1, column=0, sticky="w", padx=(0,5), pady=2)
         self.dof_var = tk.IntVar(value=1)
-        dof_combo = ttk.Combobox(type_frame, textvariable=self.dof_var,
-                                values=[1, 2, 3, 4, 5, 6], state="readonly", width=15)
-        dof_combo.grid(row=1, column=1, padx=5, pady=2)
+        dof_combo = ttk.Combobox(config_grid_frame, textvariable=self.dof_var,
+                                values=[1, 2, 3, 4, 5, 6], state="readonly")
+        dof_combo.grid(row=1, column=1, sticky="ew", padx=(0,5), pady=2)
         dof_combo.bind('<<ComboboxSelected>>', self.on_dof_change)
         
-        # 문제 3 해결: 정확한 End-Effector 위치 표시 및 목표점과의 오차 분석
-        self.current_ee_frame = ttk.Frame(type_frame)
-        self.current_ee_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+        # End-Effector 위치 표시 및 오차 분석
+        ee_info_frame = ttk.Frame(type_frame)
+        ee_info_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        self.current_ee_label = ttk.Label(self.current_ee_frame, 
+        self.current_ee_label = ttk.Label(ee_info_frame, 
                                          text="Current EE: X=30.0, Y=0.0, Z=15.0 cm", 
                                          font=('Arial', 9), foreground='darkgreen')
-        self.current_ee_label.pack()
+        self.current_ee_label.pack(anchor="w")
         
-        # 문제 3 해결: 목표점과의 오차 표시 라벨 추가
-        self.position_error_label = ttk.Label(self.current_ee_frame, 
+        # 목표점과의 오차 표시 라벨
+        self.position_error_label = ttk.Label(ee_info_frame, 
                                             text="Target Error: 0.0 mm", 
                                             font=('Arial', 8), foreground='darkblue')
-        self.position_error_label.pack()
+        self.position_error_label.pack(anchor="w")
         
         # DH 파라미터 섹션
         dh_frame = ttk.LabelFrame(parent, text="DH Parameters (cm)")
-        dh_frame.pack(fill=tk.X, pady=5)
+        dh_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(dh_frame)
         self.setup_dh_parameter_inputs(dh_frame)
         
-        # IK Solutions 프레임
-        self.setup_ik_solutions_frame(parent)
-        
         # 현재 관절 각도 표시
         current_joints_frame = ttk.LabelFrame(parent, text="Current Joint Angles (deg)")
-        current_joints_frame.pack(fill=tk.X, pady=5)
+        current_joints_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(current_joints_frame)
         self.setup_current_joint_display(current_joints_frame)
         
-        # 목표 위치 입력
-        target_frame = ttk.LabelFrame(parent, text="Target Position & Orientation")
-        target_frame.pack(fill=tk.X, pady=5)
+        # 목표 위치 입력 및 IK Solutions
+        target_frame = ttk.LabelFrame(parent, text="Target Position & Inverse Kinematics")
+        target_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(target_frame)
-        self.setup_target_inputs(target_frame)
+        self.setup_target_and_ik_section(target_frame)
         
-        # 문제 1 해결: 상태창 줄간격 문제 해결된 결과 표시 섹션
+        # 개선사항 1: 상태창을 클래스 변수로 관리하여 초기화 기능 추가
         result_frame = ttk.LabelFrame(parent, text="Analysis Results")
-        result_frame.pack(fill=tk.X, pady=5)
+        result_frame.pack(fill=tk.X, pady=5, padx=5)
         
         text_frame = ttk.Frame(result_frame)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        self.result_text = tk.Text(text_frame, height=8, width=50, font=('Courier', 9))
+        # 반응형 텍스트 영역
+        self.result_text = tk.Text(text_frame, height=8, font=('Courier', 9), wrap=tk.WORD)
         result_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.result_text.yview)
         self.result_text.configure(yscrollcommand=result_scrollbar.set)
         
@@ -210,23 +331,146 @@ class RobotSimulationGUI:
         
         # 제어 버튼들
         button_frame = ttk.Frame(parent)
-        button_frame.pack(fill=tk.X, pady=5)
+        button_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(button_frame)
         self.setup_control_buttons(button_frame)
         
-    def setup_ik_solutions_frame(self, parent):
-        """IK Solutions 프레임 설정"""
-        self.ik_solutions_frame = ttk.LabelFrame(parent, text="IK Solutions")
-        self.ik_solutions_frame.pack(fill=tk.X, pady=5)
+        # 스크롤 영역 초기 업데이트
+        self.root.after(200, self.update_scroll_region)
+
+    def clear_status_messages(self):
+        """개선사항 1: 상태창 메시지 초기화 함수"""
+        if self.result_text is not None:
+            self.result_text.delete(1.0, tk.END)
+            # 초기화되었음을 나타내는 메시지 추가
+            self.add_status_message("📝 상태창이 초기화되었습니다.")
+            self.add_status_message(f"현재 설정: {self.current_dof}DOF {self.robot_type} 모드")
+
+    def setup_target_and_ik_section(self, parent):
+        """목표 위치 및 IK 결과 섹션 - 좌우 배치 (반응형)"""
+        # 메인 컨테이너를 반응형으로 설정
+        main_container = ttk.Frame(parent)
+        main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # 스크롤 가능한 캔버스 생성
-        canvas_frame = ttk.Frame(self.ik_solutions_frame)
-        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # PanedWindow를 사용한 반응형 좌우 분할
+        target_paned = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
+        target_paned.pack(fill=tk.BOTH, expand=True)
         
-        self.ik_solutions_canvas = tk.Canvas(canvas_frame, height=120)
+        # 좌측: 목표 위치 입력
+        left_frame = ttk.LabelFrame(target_paned, text="Target Input")
+        target_paned.add(left_frame, weight=1)
+        
+        # 우측: IK Solutions
+        right_frame = ttk.LabelFrame(target_paned, text="IK Solutions")
+        target_paned.add(right_frame, weight=1)
+        
+        # 좌측에 목표 위치 입력 설정
+        self.setup_target_inputs_left(left_frame)
+        
+        # 우측에 IK Solutions 설정
+        self.setup_ik_solutions_right(right_frame)
+        
+        # 초기 분할 위치 설정 (50:50)
+        self.root.after(100, lambda: target_paned.sashpos(0, 180))
+
+    def setup_target_inputs_left(self, parent):
+        """좌측 목표 위치 입력 설정 (반응형)"""
+        # 목표 위치 입력 (반응형 그리드)
+        pos_frame = ttk.LabelFrame(parent, text="Position (cm)")
+        pos_frame.pack(fill=tk.X, pady=2, padx=5)
+        
+        # 그리드 설정으로 반응형 구현
+        inner_pos_frame = ttk.Frame(pos_frame)
+        inner_pos_frame.pack(fill=tk.X, padx=5, pady=5)
+        inner_pos_frame.columnconfigure(1, weight=1)  # 입력 필드 확장
+        
+        pos_labels = ["X:", "Y:", "Z:"]
+        self.target_pos_entries = {}
+        
+        for i, label in enumerate(pos_labels):
+            ttk.Label(inner_pos_frame, text=label, width=3).grid(row=i, column=0, sticky="w", pady=1)
+            entry = ttk.Entry(inner_pos_frame, justify='center')
+            entry.grid(row=i, column=1, sticky="ew", padx=(5,0), pady=1)
+            
+            if i < len(self.target_position):
+                entry.insert(0, f"{self.target_position[i]:.2f}")
+            else:
+                entry.insert(0, "0.00")
+            
+            entry.bind('<KeyRelease>', self.on_target_change)
+            entry.bind('<FocusOut>', self.on_target_change)
+            
+            self.target_pos_entries[i] = entry
+        
+        # 목표 자세 입력 (3DOF 이상일 때만 표시)
+        self.ori_frame = ttk.LabelFrame(parent, text="Orientation (deg)")
+        
+        inner_ori_frame = ttk.Frame(self.ori_frame)
+        inner_ori_frame.pack(fill=tk.X, padx=5, pady=5)
+        inner_ori_frame.columnconfigure(1, weight=1)  # 반응형
+        
+        ori_labels = ["Roll:", "Pitch:", "Yaw:"]
+        self.target_ori_entries = {}
+        
+        for i, label in enumerate(ori_labels):
+            ttk.Label(inner_ori_frame, text=label, width=6).grid(row=i, column=0, sticky="w", pady=1)
+            entry = ttk.Entry(inner_ori_frame, justify='center')
+            entry.grid(row=i, column=1, sticky="ew", padx=(5,0), pady=1)
+            
+            if i < len(self.target_orientation):
+                entry.insert(0, f"{self.target_orientation[i]:.2f}")
+            else:
+                entry.insert(0, "0.00")
+            
+            entry.bind('<KeyRelease>', self.on_target_change)
+            entry.bind('<FocusOut>', self.on_target_change)
+            
+            self.target_ori_entries[i] = entry
+
+        # 버튼들 (반응형)
+        button_frame = ttk.Frame(parent)
+        button_frame.pack(fill=tk.X, pady=5, padx=5)
+        
+        # Calculate 버튼 (Inverse 모드일 때만 표시)
+        self.calculate_btn = ttk.Button(button_frame, text="🔄 Calculate IK", 
+                                       command=self.calculate_inverse_kinematics)
+        
+        # Preview 버튼
+        self.preview_target_btn = ttk.Button(button_frame, text="👁️ Preview", 
+                                            command=self.preview_target_position)
+        self.preview_target_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        # 상태 라벨
+        self.preview_status_label = ttk.Label(parent, text="", 
+                                            font=('Arial', 8), foreground='darkblue')
+        self.preview_status_label.pack(pady=2)
+        
+        self.update_target_inputs_visibility()
+
+    def setup_ik_solutions_right(self, parent):
+        """우측 IK Solutions 설정 (반응형)"""
+        self.ik_solutions_container = parent
+        
+        # 안내 메시지
+        self.ik_info_label = ttk.Label(parent, 
+                                      text="Inverse 모드에서 Calculate를 누르면\nIK 해가 여기에 표시됩니다.",
+                                      font=('Arial', 9), foreground='gray',
+                                      justify=tk.CENTER)
+        self.ik_info_label.pack(expand=True)
+        
+        # 스크롤 가능한 프레임 준비
+        self.setup_ik_scrollable_frame(parent)
+
+    def setup_ik_scrollable_frame(self, parent):
+        """IK Solutions용 스크롤 가능한 프레임 설정 (반응형)"""
+        # 스크롤 가능한 캔버스 프레임
+        canvas_frame = ttk.Frame(parent)
+        
+        self.ik_solutions_canvas = tk.Canvas(canvas_frame, height=200, highlightthickness=0)
         scrollbar_ik = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.ik_solutions_canvas.yview)
         self.ik_solutions_scrollable_frame = ttk.Frame(self.ik_solutions_canvas)
         
+        # 반응형 스크롤 영역 설정
         self.ik_solutions_scrollable_frame.bind(
             "<Configure>",
             lambda e: self.ik_solutions_canvas.configure(scrollregion=self.ik_solutions_canvas.bbox("all"))
@@ -237,15 +481,32 @@ class RobotSimulationGUI:
         
         # 마우스 휠 스크롤 지원
         def _on_mousewheel_ik(event):
-            self.ik_solutions_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            if self.ik_solutions_canvas.winfo_exists():
+                self.ik_solutions_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         self.ik_solutions_canvas.bind_all("<MouseWheel>", _on_mousewheel_ik)
         
         self.ik_solutions_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar_ik.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # 처음에는 숨김
-        self.ik_solutions_frame.pack_forget()
+        # canvas_frame 저장
+        self.ik_canvas_frame = canvas_frame
+
+    def show_ik_solutions(self):
+        """IK Solutions 영역 표시"""
+        self.ik_info_label.pack_forget()
+        if hasattr(self, 'ik_canvas_frame'):
+            self.ik_canvas_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+    def hide_ik_solutions(self):
+        """IK Solutions 영역 숨기기"""
+        if hasattr(self, 'ik_canvas_frame'):
+            self.ik_canvas_frame.pack_forget()
         
+        for widget in self.ik_solutions_scrollable_frame.winfo_children():
+            widget.destroy()
+        
+        self.ik_info_label.pack(expand=True)
+
     def setup_dh_parameter_inputs(self, parent):
         """DH 파라미터 입력 필드 설정"""
         self.dh_frame = ttk.Frame(parent)
@@ -254,17 +515,17 @@ class RobotSimulationGUI:
         self.create_dh_headers()
         self.update_dh_parameter_inputs()
         
-        # YAML 파일 로드/저장 버튼들
+        # YAML 파일 로드/저장 버튼들 (반응형)
         yaml_frame = ttk.Frame(parent)
         yaml_frame.pack(fill=tk.X, pady=5)
         
         ttk.Button(yaml_frame, text="Load YAML", 
-                  command=self.load_yaml_parameters).pack(side=tk.LEFT, padx=2)
+                  command=self.load_yaml_parameters).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         ttk.Button(yaml_frame, text="Save YAML", 
-                  command=self.save_yaml_parameters).pack(side=tk.LEFT, padx=2)
+                  command=self.save_yaml_parameters).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         ttk.Button(yaml_frame, text="Load Preset", 
-                  command=self.load_preset_robot).pack(side=tk.LEFT, padx=2)
-    
+                  command=self.load_preset_robot).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+
     def create_dh_headers(self):
         """DH 파라미터 테이블 헤더 생성"""
         if hasattr(self, 'header_frame') and self.header_frame is not None:
@@ -348,6 +609,9 @@ class RobotSimulationGUI:
                 
                 self.dh_entries[i][param_name] = entry
                 self.dh_buttons[i][param_name] = {'dec': dec_btn, 'inc': inc_btn}
+        
+        # 스크롤 영역 업데이트
+        self.root.after(100, self.update_scroll_region)
 
     def start_dh_button_press(self, link_idx, param_name, step):
         """DH 파라미터 버튼 연속 누름 시작"""
@@ -421,20 +685,22 @@ class RobotSimulationGUI:
         self.input_buttons = {}
         
         for i in range(self.current_dof):
+            # 반응형 관절 프레임
             joint_frame = ttk.Frame(self.joint_input_frame)
             joint_frame.pack(fill=tk.X, pady=1)
+            joint_frame.columnconfigure(2, weight=1)  # 입력 필드 확장
             
-            ttk.Label(joint_frame, text=f"Joint {i+1}:", width=8).pack(side=tk.LEFT)
+            ttk.Label(joint_frame, text=f"Joint {i+1}:", width=8).grid(row=0, column=0, sticky="w")
             
             if self.robot_type == "Forward":
                 # Forward 모드: 조작 가능
                 dec_btn = ttk.Button(joint_frame, text="◀", width=3)
-                dec_btn.pack(side=tk.LEFT, padx=2)
+                dec_btn.grid(row=0, column=1, padx=2)
                 dec_btn.bind('<Button-1>', lambda e, idx=i: self.start_button_press(idx, -1))
                 dec_btn.bind('<ButtonRelease-1>', lambda e, idx=i: self.stop_button_press(idx))
                 
-                entry = ttk.Entry(joint_frame, width=10, justify='center')
-                entry.pack(side=tk.LEFT, padx=2)
+                entry = ttk.Entry(joint_frame, justify='center')
+                entry.grid(row=0, column=2, sticky="ew", padx=2)
                 if i < len(self.joint_angles):
                     entry.insert(0, f"{self.joint_angles[i]:.2f}")
                 else:
@@ -444,7 +710,7 @@ class RobotSimulationGUI:
                 entry.bind('<FocusOut>', self.on_joint_angle_change)
                 
                 inc_btn = ttk.Button(joint_frame, text="▶", width=3)
-                inc_btn.pack(side=tk.LEFT, padx=2)
+                inc_btn.grid(row=0, column=3, padx=2)
                 inc_btn.bind('<Button-1>', lambda e, idx=i: self.start_button_press(idx, 1))
                 inc_btn.bind('<ButtonRelease-1>', lambda e, idx=i: self.stop_button_press(idx))
                 
@@ -453,117 +719,48 @@ class RobotSimulationGUI:
             else:
                 # Inverse 모드: 표시만
                 angle_label = ttk.Label(joint_frame, text=f"{self.joint_angles[i]:.2f}°", 
-                                      width=12, relief='sunken', anchor='center')
-                angle_label.pack(side=tk.LEFT, padx=2)
-    
-    def setup_target_inputs(self, parent):
-        """목표 위치 및 자세 입력 설정"""
-        self.target_frame = ttk.Frame(parent)
-        self.target_frame.pack(fill=tk.X, pady=5)
+                                      relief='sunken', anchor='center')
+                angle_label.grid(row=0, column=1, columnspan=3, sticky="ew", padx=2)
         
-        # 목표 위치 입력
-        pos_frame = ttk.LabelFrame(self.target_frame, text="Target Position (cm)")
-        pos_frame.pack(fill=tk.X, pady=2)
-        
-        pos_labels = ["X:", "Y:", "Z:"]
-        self.target_pos_entries = {}
-        
-        for i, label in enumerate(pos_labels):
-            pos_row = ttk.Frame(pos_frame)
-            pos_row.pack(fill=tk.X, pady=1)
-            
-            ttk.Label(pos_row, text=label, width=3).pack(side=tk.LEFT)
-            entry = ttk.Entry(pos_row, width=12, justify='center')
-            entry.pack(side=tk.LEFT, padx=5)
-            
-            if i < len(self.target_position):
-                entry.insert(0, f"{self.target_position[i]:.2f}")
-            else:
-                entry.insert(0, "0.00")
-            
-            entry.bind('<KeyRelease>', self.on_target_change)
-            entry.bind('<FocusOut>', self.on_target_change)
-            
-            self.target_pos_entries[i] = entry
-        
-        # 목표 자세 입력 (3DOF 이상일 때만 표시)
-        self.ori_frame = ttk.LabelFrame(self.target_frame, text="Target Orientation (deg) - 3DOF+ Only")
-        
-        ori_labels = ["Roll:", "Pitch:", "Yaw:"]
-        self.target_ori_entries = {}
-        
-        for i, label in enumerate(ori_labels):
-            ori_row = ttk.Frame(self.ori_frame)
-            ori_row.pack(fill=tk.X, pady=1)
-            
-            ttk.Label(ori_row, text=label, width=6).pack(side=tk.LEFT)
-            entry = ttk.Entry(ori_row, width=12, justify='center')
-            entry.pack(side=tk.LEFT, padx=5)
-            
-            if i < len(self.target_orientation):
-                entry.insert(0, f"{self.target_orientation[i]:.2f}")
-            else:
-                entry.insert(0, "0.00")
-            
-            entry.bind('<KeyRelease>', self.on_target_change)
-            entry.bind('<FocusOut>', self.on_target_change)
-            
-            self.target_ori_entries[i] = entry
-
-        preview_frame = ttk.Frame(self.target_frame)
-        preview_frame.pack(fill=tk.X, pady=3)
-        self.preview_target_btn = ttk.Button(preview_frame, 
-                                            text="👁️ Preview Target", 
-                                            command=self.preview_target_position,
-                                            width=15)
-        self.preview_target_btn.pack(side=tk.LEFT, padx=5)
-        self.preview_status_label = ttk.Label(preview_frame, 
-                                            text="",
-                                            font=('Arial', 8), foreground='darkblue')
-        self.preview_status_label.pack(side=tk.LEFT, padx=10)
-        
-        self.update_target_inputs_visibility()
+        # 스크롤 영역 업데이트
+        self.root.after(100, self.update_scroll_region)
     
     def update_target_inputs_visibility(self):
         """DOF에 따른 목표 입력 가시성 업데이트"""
         if self.current_dof >= 3:
-            self.ori_frame.pack(fill=tk.X, pady=2)
+            self.ori_frame.pack(fill=tk.X, pady=2, padx=5)
         else:
             self.ori_frame.pack_forget()
     
     def setup_control_buttons(self, parent):
-        """제어 버튼 설정 - 문제 2 해결: Auto Update 완전 제거"""
+        """제어 버튼 설정 (반응형)"""
         # 첫 번째 줄: 주요 기능
         row1 = ttk.Frame(parent)
         row1.pack(fill=tk.X, pady=2)
-    
-        self.calculate_btn = ttk.Button(row1, text="🔄 Calculate", 
-                                    command=self.calculate_inverse_kinematics, width=12)
-            
-        # 핵심 시뮬레이션 버튼
+        
+        # 반응형 버튼 배치
         self.simulation_btn = ttk.Button(row1, text="🎯 Run Simulation", 
-                                        command=self.run_goal_oriented_simulation, width=15,
-                                        style='Accent.TButton')
-        self.simulation_btn.pack(side=tk.LEFT, padx=2)
+                                        command=self.run_goal_oriented_simulation)
+        self.simulation_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         
         ttk.Button(row1, text="Reset", 
-                  command=self.reset_to_default, width=8).pack(side=tk.LEFT, padx=2)
+                  command=self.reset_to_default).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         
         # 두 번째 줄: 보조 기능
         row2 = ttk.Frame(parent)
         row2.pack(fill=tk.X, pady=2)
         
         ttk.Button(row2, text="Random Params", 
-                  command=self.generate_random_parameters, width=12).pack(side=tk.LEFT, padx=2)
+                  command=self.generate_random_parameters).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         ttk.Button(row2, text="Analyze Workspace", 
-                  command=self.analyze_workspace, width=15).pack(side=tk.LEFT, padx=2)
+                  command=self.analyze_workspace).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         ttk.Button(row2, text="Save Results", 
-                  command=self.save_results, width=12).pack(side=tk.LEFT, padx=2)
+                  command=self.save_results).pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
         
         # 시뮬레이션 설명
         info_label = ttk.Label(parent, 
                               text="🎯 Run Simulation: 현재 위치에서 목표 위치까지의 최적 경로로 이동", 
-                              font=('Arial', 9), foreground='darkblue')
+                              font=('Arial', 9), foreground='darkblue', wraplength=400)
         info_label.pack(pady=5)
     
     def setup_visualization_panel(self, parent):
@@ -587,34 +784,28 @@ class RobotSimulationGUI:
         self.ax.set_title('Robot Kinematics Simulation')
         self.canvas.draw()
     
-    # ========== 문제 해결을 위한 핵심 메서드들 ==========
+    # ========== 개선된 이벤트 핸들러들 ==========
     
     def add_status_message(self, message):
-        """문제 1 해결: 상태창 줄간격 문제 완전 해결"""
+        """상태창 줄간격 문제 완전 해결"""
         if self.result_text is not None:
-            # 현재 텍스트의 마지막이 비어있는지 확인
             current_content = self.result_text.get("1.0", tk.END)
             
-            # 빈 줄 제거 로직: 연속된 줄바꿈을 하나로 통합
             if current_content.strip() and not current_content.endswith('\n'):
                 self.result_text.insert(tk.END, '\n')
             
-            # 메시지 추가 (줄바꿈 없이)
             self.result_text.insert(tk.END, message)
             
-            # 마지막에 단일 줄바꿈만 추가
             if not message.endswith('\n'):
                 self.result_text.insert(tk.END, '\n')
             
-            # 스크롤을 맨 아래로
             self.result_text.see(tk.END)
         
     def calculate_target_position_error(self, current_ee_pos_cm, target_pos_cm):
-        """문제 3 해결: 목표점과 현재 위치의 정확한 오차 계산"""
+        """목표점과 현재 위치의 정확한 오차 계산"""
         error_vector = np.array(target_pos_cm) - np.array(current_ee_pos_cm)
-        error_distance_mm = np.linalg.norm(error_vector) * 10  # cm를 mm로 변환
+        error_distance_mm = np.linalg.norm(error_vector) * 10
         
-        # 개별 축 오차도 계산
         x_error_mm = abs(error_vector[0]) * 10
         y_error_mm = abs(error_vector[1]) * 10
         z_error_mm = abs(error_vector[2]) * 10
@@ -628,7 +819,7 @@ class RobotSimulationGUI:
         }
     
     def reset_simulation_state(self):
-        """문제 4 해결: 시뮬레이션 상태 완전 초기화"""
+        """시뮬레이션 상태 완전 초기화"""
         self.simulation_state = {
             'is_first_run': True,
             'last_target_position': None,
@@ -638,12 +829,9 @@ class RobotSimulationGUI:
         self.trajectory_history = []
         self.current_path = None
         
-        # 시각적 상태도 초기화
         self.ax.clear()
         self.setup_robot_visualization()
         self.update_robot_display()
-    
-    # ========== 핵심 이벤트 핸들러들 ==========
     
     def on_parameter_change(self, event=None):
         """DH 파라미터 변경시 실시간 업데이트"""
@@ -670,7 +858,6 @@ class RobotSimulationGUI:
         except ValueError:
             pass
         
-        # 문제 4 해결: 목표 위치 변경시 시뮬레이션 상태 초기화
         if self.simulation_state['last_target_position'] != self.target_position:
             self.simulation_state['is_first_run'] = True
             self.simulation_state['last_target_position'] = self.target_position.copy()
@@ -723,18 +910,23 @@ class RobotSimulationGUI:
         self.robot_type = self.type_var.get()
 
         if self.robot_type == "Inverse":
-            self.calculate_btn.pack(side=tk.LEFT, padx=2, before=self.simulation_btn)
+            self.calculate_btn.pack(side=tk.LEFT, padx=2, before=self.preview_target_btn, fill=tk.X, expand=True)
         else:
-            self.calculate_btn.pack_forget()    
+            self.calculate_btn.pack_forget()
+            self.hide_ik_solutions()
         
         self.clear_path_visualization()
         self.clear_ik_solutions()
-        self.reset_simulation_state()  # 문제 4 해결
+        self.reset_simulation_state()
+        
+        # 개선사항 1: 모드 변경시 상태창도 초기화
+        self.clear_status_messages()
+        
         self.update_joint_display()
         self.update_robot_display()
     
     def on_dof_change(self, event=None):
-        """DOF 변경 처리"""
+        """DOF 변경 처리 - 개선사항 1 적용"""
         new_dof = self.dof_var.get()
         if new_dof != self.current_dof:
             self.current_dof = new_dof
@@ -747,12 +939,18 @@ class RobotSimulationGUI:
             self.load_default_dh_params_for_dof(new_dof)
             self.clear_path_visualization()
             self.clear_ik_solutions()
-            self.reset_simulation_state()  # 문제 4 해결
+            self.reset_simulation_state()
+            
+            # 개선사항 1: DOF 변경시 상태창 메시지 초기화
+            self.clear_status_messages()
             
             self.update_dh_parameter_inputs()
             self.update_joint_display()
             self.update_target_inputs_visibility()
             self.update_robot_display()
+            
+            # 스크롤 영역 업데이트
+            self.root.after(200, self.update_scroll_region)
     
     def start_button_press(self, joint_idx, direction):
         """관절 각도 버튼 연속 누름 시작"""
@@ -791,7 +989,7 @@ class RobotSimulationGUI:
     # ========== 핵심 계산 및 시각화 기능 ==========
     
     def update_robot_display(self):
-        """로봇 표시 업데이트 - 문제 3 해결: 정확한 위치 오차 추적"""
+        """로봇 표시 업데이트"""
         try:
             current_dh_params = self.get_current_dh_params()
             
@@ -804,13 +1002,11 @@ class RobotSimulationGUI:
             position_m = end_effector_T[:3, 3]
             position_cm = position_m * self.M_TO_CM
             
-            # 문제 3 해결: End-Effector 위치 정확 표시
             if hasattr(self, 'current_ee_label'):
                 self.current_ee_label.config(
                     text=f"Current EE: X={position_cm[0]:.1f}, Y={position_cm[1]:.1f}, Z={position_cm[2]:.1f} cm"
                 )
             
-            # 문제 3 해결: 목표점과의 오차 계산 및 표시
             try:
                 target_pos_cm = [float(self.target_pos_entries[i].get()) for i in range(3)]
                 error_info = self.calculate_target_position_error(position_cm, target_pos_cm)
@@ -888,13 +1084,98 @@ class RobotSimulationGUI:
             
             solutions = self.find_multiple_ik_solutions(dh_params, target_pos_m, target_ori)
             
-            self.display_ik_results(solutions, target_pos_cm, target_ori)
+            self.display_ik_results_in_right_panel(solutions, target_pos_cm, target_ori)
             
         except Exception as e:
             if self.result_text is not None:
                 self.result_text.delete(1.0, tk.END)
                 self.result_text.insert(1.0, f"IK 계산 오류: {str(e)}")
     
+    def display_ik_results_in_right_panel(self, solutions, target_pos_cm, target_ori):
+        """IK 결과 표시 - 우측 패널에"""
+        self.ik_solutions = solutions
+        
+        self.show_ik_solutions()
+        
+        for widget in self.ik_solutions_scrollable_frame.winfo_children():
+            widget.destroy()
+        
+        title_label = ttk.Label(self.ik_solutions_scrollable_frame, 
+                               text=f"IK Results ({self.current_dof}DOF)", 
+                               font=('Arial', 11, 'bold'))
+        title_label.pack(anchor="w", padx=5, pady=5)
+        
+        target_info_frame = ttk.Frame(self.ik_solutions_scrollable_frame)
+        target_info_frame.pack(fill=tk.X, padx=5, pady=2)
+        
+        target_text = f"Target: X={target_pos_cm[0]:.1f}, Y={target_pos_cm[1]:.1f}, Z={target_pos_cm[2]:.1f} cm"
+        ttk.Label(target_info_frame, text=target_text, font=('Arial', 9)).pack(anchor="w")
+        
+        if target_ori and self.current_dof >= 3:
+            ori_deg = [np.degrees(ori) for ori in target_ori]
+            ori_text = f"Orientation: R={ori_deg[0]:.1f}°, P={ori_deg[1]:.1f}°, Y={ori_deg[2]:.1f}°"
+            ttk.Label(target_info_frame, text=ori_text, font=('Arial', 9)).pack(anchor="w")
+        
+        ttk.Separator(self.ik_solutions_scrollable_frame, orient='horizontal').pack(fill=tk.X, pady=5)
+        
+        if solutions:
+            count_label = ttk.Label(self.ik_solutions_scrollable_frame, 
+                                   text=f"Found {len(solutions)} solution(s):", 
+                                   font=('Arial', 10, 'bold'))
+            count_label.pack(anchor="w", padx=5, pady=2)
+            
+            for i, solution in enumerate(solutions):
+                solution_frame = ttk.Frame(self.ik_solutions_scrollable_frame)
+                solution_frame.pack(fill=tk.X, padx=5, pady=2)
+                
+                solution_deg = [np.degrees(angle) for angle in solution]
+                
+                sol_title = ttk.Label(solution_frame, text=f"Solution {i+1}:", 
+                                     font=('Arial', 9, 'bold'))
+                sol_title.pack(anchor="w")
+                
+                angles_text = ", ".join([f"J{j+1}:{angle:.1f}°" for j, angle in enumerate(solution_deg)])
+                angles_label = ttk.Label(solution_frame, text=angles_text, 
+                                        font=('Arial', 8), wraplength=200)
+                angles_label.pack(anchor="w", padx=10)
+                
+                select_btn = ttk.Button(solution_frame, text=f"Select Sol {i+1}", 
+                                       command=lambda idx=i: self.select_ik_solution(idx))
+                select_btn.pack(anchor="w", padx=10, pady=2, fill=tk.X)
+                
+                if i < len(solutions) - 1:
+                    ttk.Separator(solution_frame, orient='horizontal').pack(fill=tk.X, pady=2)
+            
+            self.apply_ik_solution_to_display(0)
+            
+        else:
+            no_solution_label = ttk.Label(self.ik_solutions_scrollable_frame, 
+                                         text="No solution found", 
+                                         font=('Arial', 10), foreground='red')
+            no_solution_label.pack(anchor="w", padx=5, pady=10)
+            
+            analysis_text = self.analyze_ik_failure()
+            analysis_label = ttk.Label(self.ik_solutions_scrollable_frame, 
+                                      text=analysis_text, 
+                                      font=('Arial', 8), wraplength=200,
+                                      justify=tk.LEFT)
+            analysis_label.pack(anchor="w", padx=5, pady=5)
+        
+        self.ik_solutions_scrollable_frame.update_idletasks()
+        self.ik_solutions_canvas.configure(scrollregion=self.ik_solutions_canvas.bbox("all"))
+        
+        result_text = f"=== IK 계산 완료 ===\n"
+        result_text += f"DOF: {self.current_dof}, 해의 개수: {len(solutions)}\n"
+        result_text += f"목표: X={target_pos_cm[0]:.1f}, Y={target_pos_cm[1]:.1f}, Z={target_pos_cm[2]:.1f} cm\n"
+        if solutions:
+            result_text += "✅ 우측 패널에서 해를 선택하세요."
+        else:
+            result_text += "❌ 해를 찾을 수 없습니다. 목표 위치를 확인하세요."
+        
+        if self.result_text is not None:
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(1.0, result_text)
+
     def find_multiple_ik_solutions(self, dh_params, target_pos_m, target_ori):
         """다중 IK 해 탐색"""
         solutions = []
@@ -974,70 +1255,15 @@ class RobotSimulationGUI:
         except Exception as e:
             return False
     
-    def display_ik_results(self, solutions, target_pos_cm, target_ori):
-        """IK 결과 표시"""
-        self.ik_solutions = solutions
-        
-        result_text = f"=== Inverse Kinematics 결과 ===\n"
-        result_text += f"DOF: {self.current_dof}\n"
-        result_text += f"목표 위치: X={target_pos_cm[0]:.2f}, Y={target_pos_cm[1]:.2f}, Z={target_pos_cm[2]:.2f} cm\n"
-        
-        if target_ori:
-            ori_deg = [np.degrees(ori) for ori in target_ori]
-            result_text += f"목표 자세: Roll={ori_deg[0]:.2f}°, Pitch={ori_deg[1]:.2f}°, Yaw={ori_deg[2]:.2f}°\n"
-        
-        result_text += f"\n발견된 해의 개수: {len(solutions)}\n"
-        
-        if solutions:
-            for i, solution in enumerate(solutions):
-                solution_deg = [np.degrees(angle) for angle in solution]
-                result_text += f"해 {i+1}: "
-                result_text += ", ".join([f"J{j+1}:{angle:.1f}°" for j, angle in enumerate(solution_deg)])
-                result_text += "\n"
-            
-            self.create_ik_solution_buttons()
-            self.apply_ik_solution_to_display(0)
-            
-        else:
-            result_text += "해를 찾을 수 없습니다.\n"
-            result_text += self.analyze_ik_failure()
-        
-        if self.result_text is not None:
-            self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(1.0, result_text)
-    
-    def create_ik_solution_buttons(self):
-        """IK 해 선택 버튼들 생성"""
-        # 기존 버튼들 제거
-        for widget in self.ik_solutions_scrollable_frame.winfo_children():
-            widget.destroy()
-        
-        # 프레임 표시
-        self.ik_solutions_frame.pack(fill=tk.X, pady=5)
-        
-        title_label = ttk.Label(self.ik_solutions_scrollable_frame, 
-                               text="Available Solutions (Click to Select):", 
-                               font=('Arial', 10, 'bold'))
-        title_label.pack(anchor="w", padx=5, pady=2)
-        
-        for i, solution in enumerate(self.ik_solutions):
-            solution_deg = [np.degrees(angle) for angle in solution]
-            angles_text = ", ".join([f"J{j+1}:{angle:.1f}°" for j, angle in enumerate(solution_deg)])
-            button_text = f"Sol {i+1}: {angles_text}"
-            
-            btn = ttk.Button(self.ik_solutions_scrollable_frame, text=button_text, 
-                           command=lambda idx=i: self.select_ik_solution(idx))
-            btn.pack(fill=tk.X, padx=5, pady=1)
-        
-        # 스크롤 영역 업데이트
-        self.ik_solutions_scrollable_frame.update_idletasks()
-        self.ik_solutions_canvas.configure(scrollregion=self.ik_solutions_canvas.bbox("all"))
-    
     def select_ik_solution(self, solution_index):
-        """IK 해 선택"""
+        """IK 해 선택 및 적용"""
         if 0 <= solution_index < len(self.ik_solutions):
             self.selected_ik_solution = solution_index
             self.apply_ik_solution_to_display(solution_index)
+            
+            solution_deg = [np.degrees(angle) for angle in self.ik_solutions[solution_index]]
+            angles_text = ", ".join([f"J{j+1}:{angle:.1f}°" for j, angle in enumerate(solution_deg)])
+            self.add_status_message(f"✅ Solution {solution_index+1} 선택됨: {angles_text}")
     
     def apply_ik_solution_to_display(self, solution_index):
         """선택된 IK 해를 표시에 적용"""
@@ -1105,40 +1331,51 @@ class RobotSimulationGUI:
     
     def analyze_ik_failure(self):
         """IK 실패 원인 분석"""
-        analysis_text = "\n=== 실패 원인 분석 ===\n"
-        
-        dh_params = self.get_current_dh_params()
-        target_pos_cm = [float(self.target_pos_entries[i].get()) for i in range(3)]
-        target_pos_m = [pos * self.CM_TO_M for pos in target_pos_cm]
-        
-        max_reach = sum([abs(param[0]) for param in dh_params]) * self.CM_TO_M
-        target_distance = np.linalg.norm(target_pos_m)
-        
-        analysis_text += f"최대 도달거리: {max_reach:.3f} m ({max_reach * self.M_TO_CM:.1f} cm)\n"
-        analysis_text += f"목표까지 거리: {target_distance:.3f} m ({target_distance * self.M_TO_CM:.1f} cm)\n"
-        
-        if target_distance > max_reach * 0.95:
-            analysis_text += "❌ 목표 위치가 작업공간을 벗어남\n"
-            analysis_text += "💡 해결방안: 목표 위치를 가까이 이동하거나 링크 길이 증가\n"
-        elif target_distance < max_reach * 0.1:
-            analysis_text += "❌ 목표 위치가 너무 가까움 (특이점 영역)\n" 
-            analysis_text += "💡 해결방안: 목표 위치를 더 멀리 이동\n"
-        else:
-            analysis_text += "⚠️ 목표는 도달 범위 내이지만 다른 제약으로 인해 해가 없음\n"
-            analysis_text += "💡 해결방안: 목표 자세 변경 또는 관절 제한 확인\n"
-        
-        return analysis_text
+        try:
+            dh_params = self.get_current_dh_params()
+            target_pos_cm = [float(self.target_pos_entries[i].get()) for i in range(3)]
+            target_pos_m = [pos * self.CM_TO_M for pos in target_pos_cm]
+            
+            max_reach = sum([abs(param[0]) for param in dh_params]) * self.CM_TO_M
+            target_distance = np.linalg.norm(target_pos_m)
+            
+            analysis_text = f"Max reach: {max_reach:.2f}m\n"
+            analysis_text += f"Target distance: {target_distance:.2f}m\n"
+            
+            if target_distance > max_reach * 0.95:
+                analysis_text += "⚠️ Target too far\n"
+                analysis_text += "💡 Move target closer"
+            elif target_distance < max_reach * 0.1:
+                analysis_text += "⚠️ Target too close\n" 
+                analysis_text += "💡 Move target farther"
+            else:
+                analysis_text += "⚠️ Constraints issue\n"
+                analysis_text += "💡 Try different orientation"
+            
+            return analysis_text
+        except:
+            return "Analysis failed"
     
-    # ========== 문제 3, 4 해결: 개선된 시뮬레이션 기능 ==========
+    def clear_ik_solutions(self):
+        """IK 해 초기화"""
+        self.ik_solutions = []
+        self.selected_ik_solution = 0
+        self.hide_ik_solutions()
+    
+    def clear_path_visualization(self):
+        """경로 시각화 초기화"""
+        self.current_path = None
+        self.trajectory_history = []
+    
+    # ========== 시뮬레이션 기능 (기존 유지) ==========
     
     def run_goal_oriented_simulation(self):
-        """목표 지향적 시뮬레이션 실행 - 문제 3, 4 해결"""
+        """목표 지향적 시뮬레이션 실행"""
         if self.simulation_running:
             self.add_status_message("⚠️ 시뮬레이션이 이미 실행 중입니다.")
             return
         
         try:
-            # 문제 4 해결: 매번 시각적 상태 초기화
             if not self.simulation_state['is_first_run']:
                 self.reset_simulation_state()
             
@@ -1159,7 +1396,6 @@ class RobotSimulationGUI:
             
             self.add_status_message("🎯 목표 지향적 시뮬레이션 시작...")
             
-            # 문제 3 해결: 정확한 목표점 추적을 위한 초기 상태 기록
             initial_ee_pos = self.get_current_ee_position()
             target_pos_cm = [float(self.target_pos_entries[i].get()) for i in range(3)]
             
@@ -1346,7 +1582,7 @@ class RobotSimulationGUI:
             }
     
     def execute_goal_simulation_enhanced(self, path_result):
-        """목표 시뮬레이션 실행 - 문제 3, 4 해결: 정확성 추적 및 시각적 일관성"""
+        """목표 시뮬레이션 실행"""
         trajectory = path_result['trajectory']
         
         def animate_step(step):
@@ -1367,10 +1603,8 @@ class RobotSimulationGUI:
                     else:
                         self.update_joint_display()
                 
-                # 문제 3 해결: 정확한 최종 위치 분석 및 오차 추적
                 self.analyze_final_position_accuracy_enhanced(trajectory[-1] if trajectory else None)
                 
-                # 문제 4 해결: 시뮬레이션 상태 업데이트
                 self.simulation_state['is_first_run'] = False
                 self.simulation_state['last_joint_angles'] = self.joint_angles.copy()
                 
@@ -1393,9 +1627,8 @@ class RobotSimulationGUI:
             
             self.visualize_robot(self.get_current_dh_params(), current_joint_angles)
             
-            # 진행률 표시 (문제 1 해결: 줄간격 없이)
             progress = (step / len(trajectory)) * 100
-            if step % 5 == 0:  # 5스텝마다 업데이트
+            if step % 5 == 0:
                 self.add_status_message(f"진행: {progress:.1f}% ({step+1}/{len(trajectory)})")
             
             self.root.after(100, lambda: animate_step(step + 1))
@@ -1404,19 +1637,17 @@ class RobotSimulationGUI:
         animate_step(0)
     
     def analyze_final_position_accuracy_enhanced(self, final_joint_angles):
-        """문제 3 해결: 향상된 최종 위치 정확도 분석"""
+        """향상된 최종 위치 정확도 분석"""
         if final_joint_angles is None:
             self.add_status_message("❌ 시뮬레이션 데이터가 없습니다.")
             return
         
         try:
-            # 실제 도달한 위치 계산
             dh_params = self.get_current_dh_params()
             final_T = self.robot_kinematics.forward_kinematics(dh_params, final_joint_angles)
             actual_pos_m = final_T[:3, 3]
             actual_pos_cm = actual_pos_m * self.M_TO_CM
             
-            # 목표 위치
             target_pos_cm = []
             for i in range(3):
                 try:
@@ -1425,10 +1656,8 @@ class RobotSimulationGUI:
                 except:
                     target_pos_cm.append(0.0)
             
-            # 문제 3 해결: 정확한 오차 분석
             error_info = self.calculate_target_position_error(actual_pos_cm, target_pos_cm)
             
-            # 결과 표시
             self.add_status_message("=== 시뮬레이션 완료 ===")
             self.add_status_message(f"📍 실제 도달 위치: X={actual_pos_cm[0]:.2f}, Y={actual_pos_cm[1]:.2f}, Z={actual_pos_cm[2]:.2f} cm")
             self.add_status_message(f"🎯 목표 위치: X={target_pos_cm[0]:.2f}, Y={target_pos_cm[1]:.2f}, Z={target_pos_cm[2]:.2f} cm")
@@ -1443,7 +1672,6 @@ class RobotSimulationGUI:
                 self.add_status_message(f"   Y축 오차: {error_info['y_error_mm']:.1f} mm")
                 self.add_status_message(f"   Z축 오차: {error_info['z_error_mm']:.1f} mm")
                 
-                # 문제 3 해결: 정확한 해결방안 제시
                 if error_info['total_error_mm'] > 20:
                     self.add_status_message("💡 해결방안: 목표 위치가 작업공간을 벗어났을 가능성 - 더 가까운 목표점 설정")
                 elif error_info['total_error_mm'] > 10:
@@ -1481,24 +1709,7 @@ class RobotSimulationGUI:
         except:
             pass
     
-    def clear_path_visualization(self):
-        """경로 시각화 초기화"""
-        self.current_path = None
-        self.trajectory_history = []
-    
-    def clear_ik_solutions(self):
-        """IK 해 초기화"""
-        self.ik_solutions = []
-        self.selected_ik_solution = 0
-        
-        # IK Solutions 프레임 숨기기
-        self.ik_solutions_frame.pack_forget()
-        
-        # 스크롤 가능한 프레임 내용 지우기
-        for widget in self.ik_solutions_scrollable_frame.winfo_children():
-            widget.destroy()
-    
-    # ========== 기타 기능들 (간략화) ==========
+    # ========== 기타 기능들 ==========
     
     def load_default_dh_params_for_dof(self, dof):
         """기본 DH 파라미터 로드"""
@@ -1534,8 +1745,11 @@ class RobotSimulationGUI:
             
             self.clear_path_visualization()
             self.clear_ik_solutions()
-            self.reset_simulation_state()  # 문제 4 해결
+            self.reset_simulation_state()
             self.update_robot_display()
+            
+            # 스크롤 영역 업데이트
+            self.root.after(100, self.update_scroll_region)
             
         except Exception as e:
             self.add_status_message(f"랜덤 파라미터 생성 오류: {str(e)}")
@@ -1555,7 +1769,10 @@ class RobotSimulationGUI:
             self.load_default_dh_params_for_dof(1)
             self.clear_path_visualization()
             self.clear_ik_solutions()
-            self.reset_simulation_state()  # 문제 4 해결
+            self.reset_simulation_state()
+            
+            # 개선사항 1: 초기화시 상태창도 초기화
+            self.clear_status_messages()
             
             self.update_dh_parameter_inputs()
             self.update_joint_display()
@@ -1572,6 +1789,9 @@ class RobotSimulationGUI:
                     self.target_ori_entries[i].insert(0, f"{self.target_orientation[i]:.2f}")
             
             self.update_robot_display()
+            
+            # 스크롤 영역 업데이트
+            self.root.after(100, self.update_scroll_region)
             
             self.add_status_message("✅ 기본 1DOF 구성으로 초기화되었습니다.")
             
@@ -1667,6 +1887,9 @@ class RobotSimulationGUI:
                     self.clear_ik_solutions()
                     self.reset_simulation_state()
                     
+                    # 개선사항 1: 파일 로드시 상태창 초기화
+                    self.clear_status_messages()
+                    
                     self.update_dh_parameter_inputs()
                     self.update_joint_display()
                     self.update_target_inputs_visibility()
@@ -1680,6 +1903,11 @@ class RobotSimulationGUI:
                                     self.dh_entries[i][param_name].insert(0, f"{param[j]:.1f}")
                     
                     self.update_robot_display()
+                    
+                    # 스크롤 영역 업데이트
+                    self.root.after(100, self.update_scroll_region)
+                    
+                    self.add_status_message(f"✅ YAML 파일 로드 완료: {os.path.basename(file_path)}")
                     
             except Exception as e:
                 self.add_status_message(f"YAML 로드 오류: {str(e)}")
@@ -1698,7 +1926,7 @@ class RobotSimulationGUI:
             
             if file_path:
                 self.dh_manager.save_to_yaml(dh_params, file_path, self.current_dof)
-                self.add_status_message(f"YAML 저장: {os.path.basename(file_path)}")
+                self.add_status_message(f"💾 YAML 저장: {os.path.basename(file_path)}")
                 
         except Exception as e:
             self.add_status_message(f"YAML 저장 오류: {str(e)}")
@@ -1743,10 +1971,18 @@ class RobotSimulationGUI:
                 self.clear_ik_solutions()
                 self.reset_simulation_state()
                 
+                # 개선사항 1: 프리셋 로드시 상태창 초기화
+                self.clear_status_messages()
+                
                 self.update_dh_parameter_inputs()
                 self.update_joint_display()
                 self.update_target_inputs_visibility()
                 self.update_robot_display()
+                
+                # 스크롤 영역 업데이트
+                self.root.after(100, self.update_scroll_region)
+                
+                self.add_status_message(f"✅ 프리셋 로봇 로드 완료: {preset_name}")
                 
                 dialog.destroy()
         
@@ -1759,10 +1995,11 @@ class RobotSimulationGUI:
 
 def main():
     """메인 함수"""
-    print("=" * 70)
-    print("Robot Kinematics Simulation - 핵심 문제 해결 버전")
-    print("4개 핵심 문제 완전 해결")
-    print("=" * 70)
+    print("=" * 80)
+    print("Robot Kinematics Simulation - 스크롤 및 반응형 구조 개선 버전")
+    print("개선사항 1: DOF 변경시 상태창 메시지 초기화")
+    print("개선사항 2: 컨트롤 패널 스크롤 기능 및 반응형 구조")
+    print("=" * 80)
     
     folders = ["./yaml", "./results"]
     for folder in folders:
@@ -1773,39 +2010,43 @@ def main():
             print(f"✗ 폴더 생성 오류 {folder}: {e}")
     
     try:
-        print("\n해결된 핵심 문제들:")
-        print("1. ✅ 상태창 텍스트 줄간격 문제 완전 해결")
-        print("   - 불필요한 공백 줄 제거")
-        print("   - 깔끔한 로그 메시지 출력")
-        print("   - 연속된 줄바꿈 통합")
+        print("\n🎯 주요 개선사항:")
+        print("1. ✅ DOF/모드 변경시 상태창 메시지 자동 초기화")
+        print("   - 기존 메시지가 지워지고 새로운 설정에 맞는 메시지 표시")
+        print("   - IK 결과 패널과 동일한 초기화 로직 적용")
         
-        print("2. ✅ Auto Update 코드 완전 제거")
-        print("   - Auto Update 관련 모든 변수 및 메서드 제거")
-        print("   - 직관적인 'Calculate' 버튼으로 대체")
-        print("   - 명시적 Forward Kinematics 계산")
+        print("\n2. ✅ 스크롤 가능한 컨트롤 패널")
+        print("   - 세로 스크롤 기능으로 모든 컨트롤 요소 접근 가능")
+        print("   - 마우스 휠 스크롤 지원")
+        print("   - DOF 증가시에도 UI 오버플로우 방지")
         
-        print("3. ✅ 목표점 위치와 시뮬레이션 정확성 추적 시스템 구축")
-        print("   - 정확한 오차 계산 및 표시 (mm 단위)")
-        print("   - End-Effector와 목표점 간 실시간 오차 모니터링")
-        print("   - 허용 오차 기반 성공/실패 판정")
-        print("   - 축별 상세 오차 분석")
+        print("\n3. ✅ 반응형 구조 구현")
+        print("   - 윈도우 크기 조절시 내부 요소들 자동 크기 조정")
+        print("   - PanedWindow 사용으로 패널 크기 조절 가능")
+        print("   - 입력 필드들이 패널 너비에 따라 확장/축소")
+        print("   - 버튼들의 균등 배치로 공간 효율성 향상")
         
-        print("4. ✅ 시뮬레이션 초기화 및 시각적 동작 일관성 보장")
-        print("   - 매 실행마다 시각적 상태 완전 초기화")
-        print("   - 일관된 애니메이션 제공")
-        print("   - 시뮬레이션 상태 추적 시스템")
-        print("   - 재실행 시에도 동일한 시각적 효과")
+        print("\n4. ✅ 사용성 개선")
+        print("   - 최소 윈도우 크기 설정 (1400x800)")
+        print("   - 적응적 초기 패널 크기 (윈도우 크기의 30%)")
+        print("   - 텍스트 래핑으로 긴 텍스트 처리")
+        print("   - 스크롤 영역 자동 업데이트")
         
-        print("\n추가 개선사항:")
-        print("• 허용 오차를 5mm로 설정하여 정밀도 향상")
-        print("• 실시간 위치 오차 표시 라벨 추가")
-        print("• 목표점 추적을 위한 정밀한 분석 시스템")
-        print("• 사용자 친화적인 오류 메시지 및 해결방안 제시")
-        print("=" * 70)
+        print("\n🔧 기술적 구현:")
+        print("• Canvas + Frame 기반 스크롤 시스템")
+        print("• Grid/Pack 조합으로 반응형 레이아웃")
+        print("• 이벤트 바인딩을 통한 실시간 크기 조정")
+        print("• 상태 관리 개선으로 일관된 UI 동작")
+        
+        print("\n✅ 기존 기능 완전 유지:")
+        print("• 4개 핵심 문제 해결 상태 그대로")
+        print("• IK 결과 우측 표시 기능")
+        print("• 모든 시뮬레이션 및 계산 기능")
+        print("=" * 80)
         
         root = tk.Tk()
         app = RobotSimulationGUI(root)
-        print("✓ GUI 초기화 완료 (핵심 문제 해결 버전)")
+        print("✓ GUI 초기화 완료 (스크롤 및 반응형 구조 개선 버전)")
         
         root.mainloop()
         

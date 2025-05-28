@@ -11,40 +11,35 @@ visualization.py - MovingSimulation/visualization.py
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.patches import Circle, FancyBboxPatch
-import matplotlib.patches as patches
-from matplotlib.colors import LinearSegmentedColormap
 
 class RobotVisualizer:
     def __init__(self):
         """로봇 시각화기 초기화"""
         # 색상 팔레트 정의
         self.colors = {
-            'link': '#4A90E2',      # 링크 색상 (파란색)
-            'joint': '#E94B3C',     # 관절 색상 (빨간색)
-            'base': '#2D3748',      # 베이스 색상 (진한 회색)
-            'end_effector': '#48BB78', # End-effector 색상 (초록색)
-            'workspace': '#90CDF4',  # 작업공간 색상 (연한 파란색)
-            'trajectory': '#9F7AEA', # 궤적 색상 (보라색)
-            'frame_x': '#E53E3E',   # X축 색상 (빨간색)
-            'frame_y': '#38A169',   # Y축 색상 (초록색)
-            'frame_z': '#3182CE'    # Z축 색상 (파란색)
+            'link': '#4A90E2',
+            'joint': '#E94B3C',
+            'base': '#2D3748',
+            'end_effector': '#48BB78',
+            'workspace': '#90CDF4',
+            'trajectory': '#9F7AEA',
+            'frame_x': '#E53E3E',
+            'frame_y': '#38A169',
+            'frame_z': '#3182CE'
         }
         
         # 시각화 설정
-        self.link_width = 3.0       # 링크 선 두께
-        self.joint_size = 8.0       # 관절 점 크기
-        self.frame_length = 15.0    # 좌표계 축 길이 (cm)
-        self.workspace_alpha = 0.1  # 작업공간 투명도
+        self.link_width = 3.0
+        self.joint_size = 8.0
+        self.frame_length = 15.0
+        self.workspace_alpha = 0.1
         
         # 그래프 스타일
         self.grid_alpha = 0.3
         self.background_color = 'white'
         
     def compute_link_positions(self, dh_params, joint_angles):
-        """
-        DH 파라미터와 관절 각도로부터 각 링크의 위치 계산
+        """DH 파라미터와 관절 각도로부터 각 링크의 위치 계산
         
         Args:
             dh_params (list): DH 파라미터 [[a, alpha, d, theta], ...]
@@ -53,7 +48,7 @@ class RobotVisualizer:
         Returns:
             list: 각 링크 끝의 위치 리스트 [[x, y, z], ...]
         """
-        positions = [[0, 0, 0]]  # 베이스 위치
+        positions = [[0, 0, 0]]
         T_cumulative = np.eye(4)
         
         for i, (dh_param, joint_angle) in enumerate(zip(dh_params, joint_angles)):
@@ -84,19 +79,13 @@ class RobotVisualizer:
             T_cumulative = np.dot(T_cumulative, T_i)
             
             # 현재 링크 끝의 위치 추출 (m를 cm로 변환)
-            position = T_cumulative[:3, 3] * 100  # cm 단위로 변환
+            position = T_cumulative[:3, 3] * 100
             positions.append(position.tolist())
         
         return positions
     
     def draw_robot_links(self, ax, link_positions):
-        """
-        로봇 링크를 3D 공간에 그리기
-        
-        Args:
-            ax: matplotlib 3D axis
-            link_positions (list): 링크 위치 리스트
-        """
+        """로봇 링크를 3D 공간에 그리기"""
         # 링크들을 선으로 연결
         for i in range(len(link_positions) - 1):
             start_pos = link_positions[i]
@@ -118,13 +107,7 @@ class RobotVisualizer:
                    color=color, linewidth=linewidth, alpha=alpha)
     
     def draw_joints(self, ax, link_positions):
-        """
-        관절을 구 형태로 그리기
-        
-        Args:
-            ax: matplotlib 3D axis
-            link_positions (list): 링크 위치 리스트
-        """
+        """관절을 구 형태로 그리기"""
         for i, pos in enumerate(link_positions):
             if i == 0:
                 # 베이스
@@ -143,14 +126,7 @@ class RobotVisualizer:
                           alpha=1.0, marker='o', edgecolors='black', linewidth=1)
     
     def draw_coordinate_frames(self, ax, transformation_matrices, frame_length=None):
-        """
-        각 링크의 좌표계 그리기
-        
-        Args:
-            ax: matplotlib 3D axis
-            transformation_matrices (list): 각 링크의 변환 행렬 리스트
-            frame_length (float): 좌표계 축 길이 (cm)
-        """
+        """각 링크의 좌표계 그리기"""
         if frame_length is None:
             frame_length = self.frame_length
         
@@ -159,7 +135,7 @@ class RobotVisualizer:
             origin = T[:3, 3] * 100
             
             # 각 축의 방향 벡터
-            x_axis = T[:3, 0] * frame_length / 100  # cm를 m로 변환 후 스케일링
+            x_axis = T[:3, 0] * frame_length / 100
             y_axis = T[:3, 1] * frame_length / 100
             z_axis = T[:3, 2] * frame_length / 100
             
@@ -182,38 +158,25 @@ class RobotVisualizer:
                      arrow_length_ratio=0.1, linewidth=2)
             
             # 프레임 번호 표시
-            if i > 0:  # 베이스 프레임 제외
+            if i > 0:
                 ax.text(origin[0] + 5, origin[1] + 5, origin[2] + 5, 
                        f'{i}', fontsize=8, color='black', alpha=0.7)
     
     def draw_workspace(self, ax, dof, workspace_points=None):
-        """
-        로봇의 작업 공간 시각화
-        
-        Args:
-            ax: matplotlib 3D axis
-            dof (int): 자유도
-            workspace_points (np.array): 작업공간 점들 (선택적)
-        """
+        """로봇의 작업 공간 시각화"""
         if workspace_points is not None:
             # 제공된 작업공간 점들 사용
-            points = workspace_points * 100  # m를 cm로 변환
+            points = workspace_points * 100
             
             ax.scatter(points[:, 0], points[:, 1], points[:, 2], 
                       c=self.colors['workspace'], alpha=self.workspace_alpha,
                       s=1, marker='.')
         else:
-            # 간단한 작업공간 추정 (원형 또는 구형)
+            # 간단한 작업공간 추정
             self._draw_simple_workspace(ax, dof)
     
     def _draw_simple_workspace(self, ax, dof):
-        """
-        간단한 작업공간 표시 (추정값)
-        
-        Args:
-            ax: matplotlib 3D axis
-            dof (int): 자유도
-        """
+        """간단한 작업공간 표시 (추정값)"""
         # 기본 작업반경 추정 (cm)
         if dof == 1:
             max_reach = 50
@@ -235,15 +198,7 @@ class RobotVisualizer:
                          alpha=self.workspace_alpha, linewidth=0.5)
     
     def draw_trajectory(self, ax, trajectory_points, color=None, label="Trajectory"):
-        """
-        End-effector 궤적 그리기
-        
-        Args:
-            ax: matplotlib 3D axis
-            trajectory_points (np.array): 궤적 점들 [n_points, 3] (m 단위)
-            color (str): 궤적 색상
-            label (str): 궤적 라벨
-        """
+        """End-effector 궤적 그리기"""
         if color is None:
             color = self.colors['trajectory']
         
@@ -262,16 +217,7 @@ class RobotVisualizer:
     
     def setup_3d_plot(self, ax, title="Robot Visualization", xlim=(-100, 100), 
                      ylim=(-100, 100), zlim=(-100, 100)):
-        """
-        3D 플롯 기본 설정
-        
-        Args:
-            ax: matplotlib 3D axis
-            title (str): 그래프 제목
-            xlim (tuple): X축 범위
-            ylim (tuple): Y축 범위
-            zlim (tuple): Z축 범위
-        """
+        """3D 플롯 기본 설정"""
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         ax.set_zlim(zlim)
@@ -308,14 +254,7 @@ class RobotVisualizer:
         ax.set_zlim(mid_z - max_range/2, mid_z + max_range/2)
     
     def create_robot_schematic(self, dh_params, joint_angles, save_path=None):
-        """
-        로봇의 2D 개략도 생성 (측면도 및 평면도)
-        
-        Args:
-            dh_params (list): DH 파라미터
-            joint_angles (list): 관절 각도
-            save_path (str): 저장 경로 (선택적)
-        """
+        """로봇의 2D 개략도 생성 (측면도 및 평면도)"""
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
         
         # 링크 위치 계산
@@ -365,15 +304,7 @@ class RobotVisualizer:
         return fig
     
     def animate_robot_motion(self, ax, dh_params, trajectory_data, interval=100):
-        """
-        로봇 움직임 애니메이션 설정
-        
-        Args:
-            ax: matplotlib 3D axis
-            dh_params (list): DH 파라미터
-            trajectory_data (dict): 궤적 데이터
-            interval (int): 애니메이션 간격 (ms)
-        """
+        """로봇 움직임 애니메이션 설정"""
         from matplotlib.animation import FuncAnimation
         
         positions_history = trajectory_data['positions']
@@ -391,13 +322,13 @@ class RobotVisualizer:
             self.draw_robot_links(ax, link_positions)
             self.draw_joints(ax, link_positions)
             
-            # 궤적 히스토리 표시 (현재까지의 경로)
+            # 궤적 히스토리 표시
             if frame > 0:
                 history_positions = []
                 for i in range(frame + 1):
                     hist_angles = positions_history[i]
                     hist_link_pos = self.compute_link_positions(dh_params, hist_angles)
-                    history_positions.append(hist_link_pos[-1])  # End-effector 위치만
+                    history_positions.append(hist_link_pos[-1])
                 
                 history_array = np.array(history_positions)
                 ax.plot(history_array[:, 0], history_array[:, 1], history_array[:, 2],
@@ -409,14 +340,7 @@ class RobotVisualizer:
         return animation
     
     def create_joint_limit_visualization(self, dh_params, joint_limits, save_path=None):
-        """
-        관절 제한 범위 시각화
-        
-        Args:
-            dh_params (list): DH 파라미터
-            joint_limits (dict): 관절 제한 {joint_idx: (min_deg, max_deg)}
-            save_path (str): 저장 경로
-        """
+        """관절 제한 범위 시각화"""
         n_joints = len(dh_params)
         fig, axes = plt.subplots(2, (n_joints + 1) // 2, figsize=(4 * n_joints, 8))
         if n_joints == 1:
@@ -475,13 +399,7 @@ class RobotVisualizer:
         return fig
     
     def create_workspace_analysis(self, workspace_points, save_path=None):
-        """
-        작업공간 분석 시각화
-        
-        Args:
-            workspace_points (np.array): 작업공간 점들 (m 단위)
-            save_path (str): 저장 경로
-        """
+        """작업공간 분석 시각화"""
         fig = plt.figure(figsize=(15, 10))
         
         # m를 cm로 변환
@@ -550,12 +468,7 @@ class RobotVisualizer:
         return fig
     
     def set_color_scheme(self, scheme='default'):
-        """
-        색상 스키마 변경
-        
-        Args:
-            scheme (str): 색상 스키마 ('default', 'dark', 'colorful', 'minimal')
-        """
+        """색상 스키마 변경"""
         if scheme == 'dark':
             self.colors.update({
                 'link': '#64B5F6',
@@ -583,4 +496,3 @@ class RobotVisualizer:
                 'workspace': '#CCCCCC',
                 'trajectory': '#555555'
             })
-        # 'default'는 이미 초기화에서 설정됨

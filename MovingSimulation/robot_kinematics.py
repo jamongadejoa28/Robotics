@@ -1,9 +1,9 @@
 """
-robot_kinematics.py - MovingSimulation/robot_kinematics.py (개선된 버전)
+robot_kinematics.py - MovingSimulation/robot_kinematics.py
 
 로봇 운동학 계산을 담당하는 핵심 모듈
 - Forward Kinematics (정기구학)
-- Inverse Kinematics (역기구학) - 오류 수정 버전
+- Inverse Kinematics (역기구학)
 - DH 변환 행렬 계산
 - 자코비언 행렬 계산
 - 특이점 검출 및 회피
@@ -18,12 +18,12 @@ class RobotKinematics:
         """로봇 운동학 클래스 초기화"""
         # 관절 제한값 설정 (도 단위)
         self.joint_limits = {
-            0: (-180, 180),  # Joint 1
-            1: (-135, 135),  # Joint 2  
-            2: (-90, 90),    # Joint 3
-            3: (-180, 180),  # Joint 4
-            4: (-120, 120),  # Joint 5
-            5: (-180, 180),  # Joint 6
+            0: (-180, 180),
+            1: (-135, 135),
+            2: (-90, 90),
+            3: (-180, 180),
+            4: (-120, 120),
+            5: (-180, 180),
         }
         
         # 특이점 임계값
@@ -31,17 +31,13 @@ class RobotKinematics:
         self.condition_number_threshold = 100
         
     def dh_transform_matrix(self, a, alpha, d, theta):
-        """
-        DH 파라미터로부터 동차 변환 행렬 계산
+        """DH 파라미터로부터 동차 변환 행렬 계산
         
         Args:
             a (float): 링크 길이 (cm)
             alpha (float): 링크 트위스트 (라디안)
             d (float): 링크 오프셋 (cm)  
             theta (float): 관절 각도 (라디안)
-            
-        Returns:
-            numpy.ndarray: 4x4 동차 변환 행렬
         """
         # cm를 m로 변환
         a_m = a / 100.0
@@ -64,8 +60,7 @@ class RobotKinematics:
         return T
     
     def forward_kinematics(self, dh_params, joint_angles):
-        """
-        정기구학 계산 - 관절 각도로부터 end-effector 위치 계산
+        """정기구학 계산 - 관절 각도로부터 end-effector 위치 계산
         
         Args:
             dh_params (list): DH 파라미터 리스트 [[a, alpha, d, theta], ...]
@@ -88,7 +83,7 @@ class RobotKinematics:
             # 실제 관절 각도 = 오프셋 + 관절 변수
             theta = joint_angle + theta_offset
             
-            # DH 변환 행렬 계산
+            # DH 변환 행렬 계산 (모든 각도를 라디안으로 전달)
             T_i = self.dh_transform_matrix(a, alpha, d, theta)
             
             # 누적 변환
@@ -97,8 +92,7 @@ class RobotKinematics:
         return T_total
     
     def compute_jacobian(self, dh_params, joint_angles):
-        """
-        자코비언 행렬 계산
+        """자코비언 행렬 계산
         
         Args:
             dh_params (list): DH 파라미터 리스트
@@ -111,8 +105,8 @@ class RobotKinematics:
         jacobian = np.zeros((6, n_joints))
         
         # 각 관절의 원점과 z축 방향 벡터 계산
-        origins = [np.array([0, 0, 0])]  # 베이스 원점
-        z_axes = [np.array([0, 0, 1])]   # 베이스 z축
+        origins = [np.array([0, 0, 0])]
+        z_axes = [np.array([0, 0, 1])]
         
         T_cumulative = np.eye(4)
         
@@ -123,7 +117,7 @@ class RobotKinematics:
             theta_offset = np.radians(theta_offset_deg)
             theta = joint_angles[i] + theta_offset
             
-            T_i = self.dh_transform_matrix(a, alpha_deg, d, np.degrees(theta))
+            T_i = self.dh_transform_matrix(a, alpha, d, theta)
             T_cumulative = np.dot(T_cumulative, T_i)
             
             # 관절 i의 원점과 z축
@@ -152,22 +146,9 @@ class RobotKinematics:
         return jacobian
     
     def check_singularity(self, jacobian):
-        """
-        특이점 검사
-        
-        Args:
-            jacobian (numpy.ndarray): 자코비언 행렬
-            
-        Returns:
-            dict: 특이점 정보
-                - is_singular (bool): 특이점 여부
-                - determinant (float): 행렬식
-                - condition_number (float): 조건수
-                - rank (int): 계수
-        """
+        """특이점 검사"""
         # 자코비언이 정사각행렬이 아닌 경우 처리
         if jacobian.shape[0] != jacobian.shape[1]:
-            # 최소 제곱 문제로 변환 (J^T * J)
             jacobian_square = np.dot(jacobian.T, jacobian)
         else:
             jacobian_square = jacobian
@@ -199,17 +180,7 @@ class RobotKinematics:
         }
     
     def avoid_singularity(self, jacobian, joint_angles, damping_factor=0.1):
-        """
-        감쇠 최소제곱법을 이용한 특이점 회피
-        
-        Args:
-            jacobian (numpy.ndarray): 자코비언 행렬
-            joint_angles (list): 현재 관절 각도
-            damping_factor (float): 감쇠 계수
-            
-        Returns:
-            numpy.ndarray: 수정된 자코비언 의사역행렬
-        """
+        """감쇠 최소제곱법을 이용한 특이점 회피"""
         # 감쇠 행렬 추가
         n = jacobian.shape[1]
         damping_matrix = damping_factor * np.eye(n)
@@ -219,26 +190,13 @@ class RobotKinematics:
             JTJ_damped = np.dot(jacobian.T, jacobian) + damping_matrix
             J_pinv = np.dot(np.linalg.inv(JTJ_damped), jacobian.T)
         except:
-            # 일반 의사역행렬로 대체
             J_pinv = np.linalg.pinv(jacobian)
         
         return J_pinv
     
     def inverse_kinematics(self, dh_params, target_position, target_orientation=None, 
                           initial_guess=None, method='numerical'):
-        """
-        역기구학 계산 - 개선된 버전 (오류 수정)
-        
-        Args:
-            dh_params (list): DH 파라미터 리스트
-            target_position (list): 목표 위치 [x, y, z] (m)
-            target_orientation (list): 목표 자세 [roll, pitch, yaw] (라디안)
-            initial_guess (list): 초기 추정값
-            method (str): 해법 방식 ('numerical', 'analytical')
-            
-        Returns:
-            list: 관절 각도 리스트 (라디안) 또는 None (해가 없는 경우)
-        """
+        """역기구학 계산"""
         n_joints = len(dh_params)
         
         # 초기 추정값 설정
@@ -256,16 +214,7 @@ class RobotKinematics:
             raise ValueError(f"Unknown method: {method}")
     
     def create_target_transform_matrix(self, position, orientation=None):
-        """
-        목표 위치와 자세로부터 동차 변환 행렬 생성
-        
-        Args:
-            position (list): [x, y, z] (m)
-            orientation (list): [roll, pitch, yaw] (라디안)
-            
-        Returns:
-            numpy.ndarray: 4x4 동차 변환 행렬
-        """
+        """목표 위치와 자세로부터 동차 변환 행렬 생성"""
         T = np.eye(4)
         T[:3, 3] = position
         
@@ -291,23 +240,12 @@ class RobotKinematics:
         return T
     
     def _inverse_kinematics_numerical_improved(self, dh_params, target_T, initial_guess):
-        """
-        개선된 수치해석적 역기구학 해법 (오류 수정 버전)
-        
-        Args:
-            dh_params (list): DH 파라미터
-            target_T (numpy.ndarray): 목표 변환 행렬
-            initial_guess (list): 초기 추정값
-            
-        Returns:
-            list: 관절 각도 또는 None
-        """
+        """개선된 수치해석적 역기구학 해법"""
         n_joints = len(dh_params)
         
         def objective_function(joint_angles):
             """목적 함수 - 위치와 자세 오차의 제곱합"""
             try:
-                # 정기구학으로 현재 end-effector 위치 계산
                 current_T = self.forward_kinematics(dh_params, joint_angles)
                 
                 # 위치 오차
@@ -321,14 +259,14 @@ class RobotKinematics:
                     
                     # 회전 행렬을 축-각 표현으로 변환하여 오차 계산
                     trace_R = np.trace(R_error)
-                    trace_R = np.clip(trace_R, -1, 3)  # 수치 안정성을 위한 클리핑
+                    trace_R = np.clip(trace_R, -1, 3)
                     
                     if trace_R >= 3:
                         angle_error = 0.0
                     else:
                         angle_error = np.arccos((trace_R - 1) / 2)
                     
-                    # 회전축 계산 (간단화)
+                    # 회전축 계산
                     if abs(angle_error) > 1e-6:
                         axis_error = np.array([
                             R_error[2, 1] - R_error[1, 2],
@@ -341,12 +279,12 @@ class RobotKinematics:
                 else:
                     rot_error = np.zeros(3)
                 
-                # 전체 오차 벡터 (위치 오차에 높은 가중치)
+                # 전체 오차 벡터
                 error_vector = np.concatenate([pos_error * 10, rot_error])
                 return np.sum(error_vector**2)
                 
             except Exception as e:
-                return 1e6  # 계산 실패시 큰 오차값 반환
+                return 1e6
         
         def residual_function(joint_angles):
             """잔차 함수 - least_squares용"""
@@ -356,14 +294,12 @@ class RobotKinematics:
                 # 위치 오차
                 pos_error = target_T[:3, 3] - current_T[:3, 3]
                 
-                # 자세 오차 (단순화)
+                # 자세 오차
                 if n_joints >= 3 and target_T.shape == (4, 4):
-                    # Z축 방향 벡터 비교
                     z_target = target_T[:3, 2]
                     z_current = current_T[:3, 2]
                     z_error = z_target - z_current
                     
-                    # 필요한 경우 더 많은 자세 제약 추가
                     if n_joints >= 6:
                         x_target = target_T[:3, 0]
                         x_current = current_T[:3, 0]
@@ -372,16 +308,14 @@ class RobotKinematics:
                     else:
                         return np.concatenate([pos_error, z_error])
                 else:
-                    # DOF가 낮거나 자세 제약이 없는 경우
                     if n_joints == 1:
-                        return [pos_error[0]]  # X축 위치만
+                        return [pos_error[0]]
                     elif n_joints == 2:
-                        return pos_error[:2]   # X, Y 위치
+                        return pos_error[:2]
                     else:
-                        return pos_error       # X, Y, Z 위치
+                        return pos_error
                         
             except Exception as e:
-                # 오류 발생시 큰 잔차 반환
                 if n_joints == 1:
                     return [1000.0]
                 elif n_joints == 2:
@@ -408,14 +342,14 @@ class RobotKinematics:
             if result1.success and result1.fun < 1e-4:
                 return result1.x.tolist()
             
-            # Method 2: scipy.optimize.least_squares 사용 (더 안정적)
+            # Method 2: scipy.optimize.least_squares 사용
             result2 = least_squares(residual_function, initial_guess, 
                                   bounds=([b[0] for b in bounds], [b[1] for b in bounds]))
             
             if result2.success and result2.cost < 1e-4:
                 return result2.x.tolist()
             
-            # Method 3: fsolve 시도 (더 간단한 문제에 대해)
+            # Method 3: fsolve 시도
             if n_joints <= 3:
                 try:
                     with warnings.catch_warnings():
@@ -428,7 +362,6 @@ class RobotKinematics:
                 except:
                     pass
             
-            # 모든 방법이 실패한 경우 None 반환
             return None
         
         except Exception as e:
@@ -436,17 +369,7 @@ class RobotKinematics:
             return None
     
     def _ik_equations_improved(self, joint_angles, dh_params, target_T):
-        """
-        개선된 역기구학 방정식 (fsolve용) - 오류 수정 버전
-        
-        Args:
-            joint_angles: 관절 각도 배열
-            dh_params: DH 파라미터
-            target_T: 목표 변환 행렬
-            
-        Returns:
-            적절한 크기의 오차 배열
-        """
+        """개선된 역기구학 방정식 (fsolve용)"""
         try:
             n_joints = len(joint_angles)
             current_T = self.forward_kinematics(dh_params, joint_angles)
@@ -455,27 +378,17 @@ class RobotKinematics:
             pos_error = target_T[:3, 3] - current_T[:3, 3]
             
             if n_joints == 1:
-                # 1DOF: X축 위치만 고려
                 return [pos_error[0]]
-            
             elif n_joints == 2:
-                # 2DOF: X, Y 위치 고려
                 return pos_error[:2].tolist()
-            
             elif n_joints == 3:
-                # 3DOF: X, Y, Z 위치 고려
                 return pos_error.tolist()
-            
             elif n_joints == 4:
-                # 4DOF: 위치 + Z축 방향
                 z_target = target_T[:3, 2]
                 z_current = current_T[:3, 2]
-                z_error = np.dot(z_target, z_current) - 1  # 코사인 오차
-                
+                z_error = np.dot(z_target, z_current) - 1
                 return np.concatenate([pos_error, [z_error]]).tolist()
-            
             elif n_joints == 5:
-                # 5DOF: 위치 + Z축, Y축 방향
                 z_target = target_T[:3, 2]
                 z_current = current_T[:3, 2]
                 z_error = np.dot(z_target, z_current) - 1
@@ -485,19 +398,16 @@ class RobotKinematics:
                 y_error = np.dot(y_target, y_current) - 1
                 
                 return np.concatenate([pos_error, [z_error, y_error]]).tolist()
-            
             elif n_joints >= 6:
-                # 6DOF+: 위치 + 전체 자세
                 # 회전 행렬 오차를 축-각 표현으로 변환
                 R_target = target_T[:3, :3]
                 R_current = current_T[:3, :3]
                 R_error = np.dot(R_target, R_current.T)
                 
-                # 회전 벡터 추출 (Rodrigues 공식의 역)
                 trace_R = np.trace(R_error)
                 trace_R = np.clip(trace_R, -1, 3)
                 
-                if trace_R >= 2.99:  # 거의 같은 경우
+                if trace_R >= 2.99:
                     rot_error = np.zeros(3)
                 else:
                     angle = np.arccos((trace_R - 1) / 2)
@@ -512,13 +422,10 @@ class RobotKinematics:
                         rot_error = axis * angle
                 
                 return np.concatenate([pos_error, rot_error]).tolist()
-            
             else:
-                # 예상치 못한 경우
                 return pos_error.tolist()
                 
         except Exception as e:
-            # 오류 발생시 적절한 크기의 배열 반환
             n_joints = len(joint_angles)
             if n_joints == 1:
                 return [1000.0]
@@ -543,10 +450,7 @@ class RobotKinematics:
             return False
     
     def _inverse_kinematics_analytical(self, dh_params, target_position, target_orientation):
-        """
-        해석적 역기구학 해법 (특정 로봇 구조에 대해)
-        현재는 간단한 2D 평면 로봇에 대해서만 구현
-        """
+        """해석적 역기구학 해법 (특정 로봇 구조에 대해)"""
         n_joints = len(dh_params)
         
         if n_joints == 2:
@@ -554,7 +458,6 @@ class RobotKinematics:
         elif n_joints == 3:
             return self._3dof_planar_ik(dh_params, target_position)
         else:
-            # 복잡한 구조는 수치해석적 방법 사용
             return self._inverse_kinematics_numerical_improved(dh_params, 
                 self.create_target_transform_matrix(target_position, target_orientation), 
                 [0.0] * n_joints)
@@ -564,15 +467,15 @@ class RobotKinematics:
         x, y = target_position[0], target_position[1]
         
         # 링크 길이 (cm를 m로 변환)
-        l1 = dh_params[0][0] / 100.0  # a1
-        l2 = dh_params[1][0] / 100.0  # a2
+        l1 = dh_params[0][0] / 100.0
+        l2 = dh_params[1][0] / 100.0
         
         # 목표점까지의 거리
         r = np.sqrt(x**2 + y**2)
         
         # 도달 가능성 검사
         if r > (l1 + l2) or r < abs(l1 - l2):
-            return None  # 도달 불가능
+            return None
         
         # 코사인 법칙으로 θ2 계산
         cos_theta2 = (x**2 + y**2 - l1**2 - l2**2) / (2 * l1 * l2)
@@ -588,22 +491,19 @@ class RobotKinematics:
         # θ1 계산
         for theta2 in [theta2_1, theta2_2]:
             denominator = l1 + l2 * np.cos(theta2)
-            if abs(denominator) > 1e-6:  # 특이점 회피
+            if abs(denominator) > 1e-6:
                 theta1 = np.arctan2(y, x) - np.arctan2(l2 * np.sin(theta2), denominator)
                 
-                # 관절 제한 검사
                 if self._check_joint_limits([theta1, theta2]):
                     return [theta1, theta2]
         
         return None
     
     def _3dof_planar_ik(self, dh_params, target_position):
-        """3DOF 평면 로봇의 해석적 역기구학 (간단화)"""
-        # 먼저 2DOF로 위치 해결
+        """3DOF 평면 로봇의 해석적 역기구학"""
         if len(dh_params) >= 2:
             two_dof_solution = self._2dof_planar_ik(dh_params[:2], target_position)
             if two_dof_solution:
-                # 세 번째 관절은 0으로 설정 (또는 추가 조건 적용)
                 return two_dof_solution + [0.0]
         
         return None
@@ -623,16 +523,7 @@ class RobotKinematics:
         return self.joint_limits.get(joint_index, (-180, 180))
     
     def compute_workspace(self, dh_params, resolution=50):
-        """
-        로봇의 작업 공간 계산
-        
-        Args:
-            dh_params (list): DH 파라미터
-            resolution (int): 샘플링 해상도
-            
-        Returns:
-            numpy.ndarray: 작업 공간 점들의 배열
-        """
+        """로봇의 작업 공간 계산"""
         n_joints = len(dh_params)
         workspace_points = []
         
@@ -676,17 +567,8 @@ class RobotKinematics:
         return np.array(workspace_points)
     
     def compute_manipulability(self, jacobian):
-        """
-        조작성 지수 계산
-        
-        Args:
-            jacobian (numpy.ndarray): 자코비언 행렬
-            
-        Returns:
-            float: 조작성 지수
-        """
+        """조작성 지수 계산"""
         try:
-            # 자코비언이 정사각행렬이 아닌 경우
             if jacobian.shape[0] != jacobian.shape[1]:
                 JJT = np.dot(jacobian, jacobian.T)
                 manipulability = np.sqrt(np.linalg.det(JJT))
@@ -698,8 +580,7 @@ class RobotKinematics:
         return manipulability
     
     def get_transformation_matrices(self, dh_params, joint_angles):
-        """
-        각 링크의 변환 행렬들을 반환 (시각화용)
+        """각 링크의 변환 행렬들을 반환 (시각화용)
         
         Args:
             dh_params (list): DH 파라미터
@@ -708,7 +589,7 @@ class RobotKinematics:
         Returns:
             list: 각 링크의 누적 변환 행렬 리스트
         """
-        transformation_matrices = [np.eye(4)]  # 베이스 프레임
+        transformation_matrices = [np.eye(4)]
         T_cumulative = np.eye(4)
         
         for i, (dh_param, joint_angle) in enumerate(zip(dh_params, joint_angles)):
@@ -717,7 +598,7 @@ class RobotKinematics:
             theta_offset = np.radians(theta_offset_deg)
             theta = joint_angle + theta_offset
             
-            T_i = self.dh_transform_matrix(a, alpha_deg, d, np.degrees(theta))
+            T_i = self.dh_transform_matrix(a, alpha, d, theta)
             T_cumulative = np.dot(T_cumulative, T_i)
             transformation_matrices.append(T_cumulative.copy())
         

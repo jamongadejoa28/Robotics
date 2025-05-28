@@ -1,11 +1,6 @@
 """
-Robot Kinematics Simulation Program - 스크롤 및 반응형 구조 개선 버전
+Robot Kinematics Simulation Program
 메인 실행 파일 - MovingSimulation/main.py
-
-개선사항:
-1. DOF 변경시 상태창 메시지 초기화 추가
-2. 컨트롤 패널 스크롤 기능 및 반응형 구조 구현
-3. 패널 크기 조절시 내부 요소들의 적응적 크기 조정
 """
 
 import sys
@@ -13,18 +8,12 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, filedialog
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import threading
-import time
-import yaml
-import csv
 from datetime import datetime
 
-# 사용자 정의 모듈 import
 from robot_kinematics import RobotKinematics
 from dh_parameters import DHParameterManager
 from trajectory_planner import TrajectoryPlanner
@@ -33,11 +22,11 @@ from utils import Utils
 
 class RobotSimulationGUI:
     def __init__(self, root):
-        """로봇 시뮬레이션 GUI 초기화 - 스크롤 및 반응형 구조 개선 버전"""
+        """로봇 시뮬레이션 GUI 초기화"""
         self.root = root
-        self.root.title("Robot Kinematics Simulation - 스크롤 및 반응형 구조 개선 버전")
+        self.root.title("Robot Kinematics Simulation")
         self.root.geometry("1700x1000")
-        self.root.minsize(1400, 800)  # 최소 크기 설정
+        self.root.minsize(1400, 800)
         
         # 핵심 클래스 초기화
         self.robot_kinematics = RobotKinematics()
@@ -55,9 +44,9 @@ class RobotSimulationGUI:
         self.dh_params = []
         self.simulation_running = False
         
-        # 정확성 추적을 위한 정밀한 허용 오차 설정
-        self.position_tolerance_mm = 5.0  # 5mm 허용 오차
-        self.angle_tolerance_deg = 0.5    # 0.5도 허용 오차
+        # 정밀도 설정
+        self.position_tolerance_mm = 5.0
+        self.angle_tolerance_deg = 0.5
         
         # 버튼 누름 상태 관리
         self.button_pressed = {}
@@ -111,13 +100,11 @@ class RobotSimulationGUI:
         self.setup_gui()
         self.setup_robot_visualization()
         self.load_initial_configuration()
-        
-        # 반응형 구조를 위한 이벤트 바인딩
         self.setup_responsive_bindings()
         
     def setup_gui(self):
-        """GUI 설정 - 스크롤 및 반응형 구조 적용"""
-        # 메인 PanedWindow - 좌우 분할 (반응형)
+        """GUI 설정"""
+        # 메인 PanedWindow - 좌우 분할
         self.main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -126,19 +113,19 @@ class RobotSimulationGUI:
         
         # 우측 시각화 패널
         viz_frame = ttk.Frame(self.main_paned)
-        self.main_paned.add(viz_frame, weight=3)  # 가중치 설정으로 반응형 구현
+        self.main_paned.add(viz_frame, weight=3)
         
         # 시각화 패널 설정
         self.setup_visualization_panel(viz_frame)
         
-        # 초기 패널 크기 설정을 지연 실행
+        # 초기 패널 크기 설정
         self.root.after(100, self.set_initial_panel_sizes)
 
     def setup_scrollable_control_panel(self):
         """스크롤 가능한 컨트롤 패널 설정"""
-        # 컨트롤 패널 컨테이너 (고정 크기)
+        # 컨트롤 패널 컨테이너
         control_container = ttk.Frame(self.main_paned)
-        self.main_paned.add(control_container, weight=1)  # 가중치 설정
+        self.main_paned.add(control_container, weight=1)
         
         # Canvas와 Scrollbar를 위한 프레임
         canvas_frame = ttk.Frame(control_container)
@@ -148,18 +135,18 @@ class RobotSimulationGUI:
         self.control_scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical")
         self.control_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Canvas 생성 (스크롤 가능한 영역)
+        # Canvas 생성
         self.control_canvas = tk.Canvas(
             canvas_frame, 
             yscrollcommand=self.control_scrollbar.set,
-            highlightthickness=0  # 경계선 제거
+            highlightthickness=0
         )
         self.control_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Scrollbar와 Canvas 연결
         self.control_scrollbar.config(command=self.control_canvas.yview)
         
-        # 스크롤 가능한 프레임 생성 (실제 컨텐츠가 들어갈 곳)
+        # 스크롤 가능한 프레임 생성
         self.control_scrollable_frame = ttk.Frame(self.control_canvas)
         
         # Canvas에 스크롤 가능한 프레임 추가
@@ -175,7 +162,7 @@ class RobotSimulationGUI:
             self.on_control_frame_configure
         )
         
-        # Canvas 크기 변경시 내부 프레임 크기도 조정 (반응형)
+        # Canvas 크기 변경시 내부 프레임 크기도 조정
         self.control_canvas.bind(
             "<Configure>",
             self.on_control_canvas_configure
@@ -189,82 +176,67 @@ class RobotSimulationGUI:
 
     def on_control_frame_configure(self, event):
         """스크롤 가능한 프레임 크기 변경시 스크롤 영역 업데이트"""
-        # Canvas의 스크롤 영역을 프레임 크기에 맞게 조정
         self.control_canvas.configure(scrollregion=self.control_canvas.bbox("all"))
         
     def on_control_canvas_configure(self, event):
-        """Canvas 크기 변경시 내부 프레임 너비를 Canvas 너비에 맞게 조정 (반응형)"""
+        """Canvas 크기 변경시 내부 프레임 너비를 Canvas 너비에 맞게 조정"""
         canvas_width = event.width
-        # 내부 프레임의 너비를 Canvas 너비에 맞게 설정
         self.control_canvas.itemconfig(self.canvas_window, width=canvas_width)
 
     def setup_mouse_wheel_scrolling(self):
         """마우스 휠 스크롤 기능 설정"""
         def on_mousewheel(event):
-            # 스크롤 가능한 영역에서만 작동하도록 제한
             if self.control_canvas.winfo_exists():
                 self.control_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
-        # Canvas와 하위 위젯들에 마우스 휠 이벤트 바인딩
         def bind_to_mousewheel(widget):
             widget.bind("<MouseWheel>", on_mousewheel)
             for child in widget.winfo_children():
                 bind_to_mousewheel(child)
         
-        # 초기 바인딩
         self.root.after(500, lambda: bind_to_mousewheel(self.control_scrollable_frame))
 
     def setup_responsive_bindings(self):
         """반응형 구조를 위한 이벤트 바인딩"""
-        # 윈도우 크기 변경시 적응적 조정
         self.root.bind("<Configure>", self.on_window_resize)
-        
-        # PanedWindow 구분선 이동시 내부 요소 크기 조정
         self.main_paned.bind("<ButtonRelease-1>", self.on_paned_resize)
 
     def on_window_resize(self, event):
-        """윈도우 크기 변경시 처리 (반응형)"""
-        # 윈도우 자체의 크기 변경에만 반응 (하위 위젯 제외)
+        """윈도우 크기 변경시 처리"""
         if event.widget == self.root:
-            # 스크롤 영역 업데이트
             self.root.after(100, self.update_scroll_region)
             
     def on_paned_resize(self, event):
         """PanedWindow 크기 조정시 처리"""
-        # 스크롤 영역 업데이트
         self.root.after(50, self.update_scroll_region)
 
     def update_scroll_region(self):
         """스크롤 영역 업데이트"""
         if hasattr(self, 'control_canvas') and self.control_canvas.winfo_exists():
-            # 스크롤 영역을 현재 내용에 맞게 조정
             self.control_canvas.configure(scrollregion=self.control_canvas.bbox("all"))
 
     def set_initial_panel_sizes(self):
         """초기 패널 크기를 적응적으로 설정"""
         try:
-            # 전체 너비의 30%를 컨트롤 패널로, 70%를 시각화 패널로 할당
             total_width = self.root.winfo_width()
             control_width = int(total_width * 0.3)
-            control_width = max(control_width, 400)  # 최소 400픽셀 보장
-            control_width = min(control_width, 600)  # 최대 600픽셀 제한
-            
+            control_width = max(control_width, 400)
+            control_width = min(control_width, 600)
             self.main_paned.sashpos(0, control_width)
         except:
-            # 기본값으로 대체
             self.main_paned.sashpos(0, 500)
 
     def setup_control_content(self, parent):
-        """컨트롤 패널 내용 설정 (스크롤 가능한 프레임 내부)"""
+        """컨트롤 패널 내용 설정"""
         # 로봇 구성 섹션
         type_frame = ttk.LabelFrame(parent, text="Robot Configuration")
         type_frame.pack(fill=tk.X, pady=5, padx=5)
         self.control_widgets.append(type_frame)
         
-        # 로봇 타입 선택 (반응형 그리드)
+        # 로봇 타입 선택
         config_grid_frame = ttk.Frame(type_frame)
         config_grid_frame.pack(fill=tk.X, padx=5, pady=5)
-        config_grid_frame.columnconfigure(1, weight=1)  # 두 번째 열 확장 가능
+        config_grid_frame.columnconfigure(1, weight=1)
         
         ttk.Label(config_grid_frame, text="Mode:").grid(row=0, column=0, sticky="w", padx=(0,5), pady=2)
         self.type_var = tk.StringVar(value="Forward")
@@ -290,7 +262,6 @@ class RobotSimulationGUI:
                                          font=('Arial', 9), foreground='darkgreen')
         self.current_ee_label.pack(anchor="w")
         
-        # 목표점과의 오차 표시 라벨
         self.position_error_label = ttk.Label(ee_info_frame, 
                                             text="Target Error: 0.0 mm", 
                                             font=('Arial', 8), foreground='darkblue')
@@ -314,14 +285,13 @@ class RobotSimulationGUI:
         self.control_widgets.append(target_frame)
         self.setup_target_and_ik_section(target_frame)
         
-        # 개선사항 1: 상태창을 클래스 변수로 관리하여 초기화 기능 추가
+        # 상태창
         result_frame = ttk.LabelFrame(parent, text="Analysis Results")
         result_frame.pack(fill=tk.X, pady=5, padx=5)
         
         text_frame = ttk.Frame(result_frame)
         text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # 반응형 텍스트 영역
         self.result_text = tk.Text(text_frame, height=8, font=('Courier', 9), wrap=tk.WORD)
         result_scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=self.result_text.yview)
         self.result_text.configure(yscrollcommand=result_scrollbar.set)
@@ -339,15 +309,14 @@ class RobotSimulationGUI:
         self.root.after(200, self.update_scroll_region)
 
     def clear_status_messages(self):
-        """개선사항 1: 상태창 메시지 초기화 함수"""
+        """상태창 메시지 초기화"""
         if self.result_text is not None:
             self.result_text.delete(1.0, tk.END)
-            # 초기화되었음을 나타내는 메시지 추가
             self.add_status_message("📝 상태창이 초기화되었습니다.")
             self.add_status_message(f"현재 설정: {self.current_dof}DOF {self.robot_type} 모드")
 
     def setup_target_and_ik_section(self, parent):
-        """목표 위치 및 IK 결과 섹션 - 좌우 배치 (반응형)"""
+        """목표 위치 및 IK 결과 섹션"""
         # 메인 컨테이너를 반응형으로 설정
         main_container = ttk.Frame(parent)
         main_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -370,19 +339,18 @@ class RobotSimulationGUI:
         # 우측에 IK Solutions 설정
         self.setup_ik_solutions_right(right_frame)
         
-        # 초기 분할 위치 설정 (50:50)
+        # 초기 분할 위치 설정
         self.root.after(100, lambda: target_paned.sashpos(0, 180))
 
     def setup_target_inputs_left(self, parent):
-        """좌측 목표 위치 입력 설정 (반응형)"""
-        # 목표 위치 입력 (반응형 그리드)
+        """좌측 목표 위치 입력 설정"""
+        # 목표 위치 입력
         pos_frame = ttk.LabelFrame(parent, text="Position (cm)")
         pos_frame.pack(fill=tk.X, pady=2, padx=5)
         
-        # 그리드 설정으로 반응형 구현
         inner_pos_frame = ttk.Frame(pos_frame)
         inner_pos_frame.pack(fill=tk.X, padx=5, pady=5)
-        inner_pos_frame.columnconfigure(1, weight=1)  # 입력 필드 확장
+        inner_pos_frame.columnconfigure(1, weight=1)
         
         pos_labels = ["X:", "Y:", "Z:"]
         self.target_pos_entries = {}
@@ -402,12 +370,12 @@ class RobotSimulationGUI:
             
             self.target_pos_entries[i] = entry
         
-        # 목표 자세 입력 (3DOF 이상일 때만 표시)
+        # 목표 자세 입력
         self.ori_frame = ttk.LabelFrame(parent, text="Orientation (deg)")
         
         inner_ori_frame = ttk.Frame(self.ori_frame)
         inner_ori_frame.pack(fill=tk.X, padx=5, pady=5)
-        inner_ori_frame.columnconfigure(1, weight=1)  # 반응형
+        inner_ori_frame.columnconfigure(1, weight=1)
         
         ori_labels = ["Roll:", "Pitch:", "Yaw:"]
         self.target_ori_entries = {}
@@ -427,11 +395,11 @@ class RobotSimulationGUI:
             
             self.target_ori_entries[i] = entry
 
-        # 버튼들 (반응형)
+        # 버튼들
         button_frame = ttk.Frame(parent)
         button_frame.pack(fill=tk.X, pady=5, padx=5)
         
-        # Calculate 버튼 (Inverse 모드일 때만 표시)
+        # Calculate 버튼
         self.calculate_btn = ttk.Button(button_frame, text="🔄 Calculate IK", 
                                        command=self.calculate_inverse_kinematics)
         
@@ -448,7 +416,7 @@ class RobotSimulationGUI:
         self.update_target_inputs_visibility()
 
     def setup_ik_solutions_right(self, parent):
-        """우측 IK Solutions 설정 (반응형)"""
+        """우측 IK Solutions 설정"""
         self.ik_solutions_container = parent
         
         # 안내 메시지
@@ -462,15 +430,13 @@ class RobotSimulationGUI:
         self.setup_ik_scrollable_frame(parent)
 
     def setup_ik_scrollable_frame(self, parent):
-        """IK Solutions용 스크롤 가능한 프레임 설정 (반응형)"""
-        # 스크롤 가능한 캔버스 프레임
+        """IK Solutions용 스크롤 가능한 프레임 설정"""
         canvas_frame = ttk.Frame(parent)
         
         self.ik_solutions_canvas = tk.Canvas(canvas_frame, height=200, highlightthickness=0)
         scrollbar_ik = ttk.Scrollbar(canvas_frame, orient="vertical", command=self.ik_solutions_canvas.yview)
         self.ik_solutions_scrollable_frame = ttk.Frame(self.ik_solutions_canvas)
         
-        # 반응형 스크롤 영역 설정
         self.ik_solutions_scrollable_frame.bind(
             "<Configure>",
             lambda e: self.ik_solutions_canvas.configure(scrollregion=self.ik_solutions_canvas.bbox("all"))
@@ -488,7 +454,6 @@ class RobotSimulationGUI:
         self.ik_solutions_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar_ik.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # canvas_frame 저장
         self.ik_canvas_frame = canvas_frame
 
     def show_ik_solutions(self):
@@ -515,7 +480,7 @@ class RobotSimulationGUI:
         self.create_dh_headers()
         self.update_dh_parameter_inputs()
         
-        # YAML 파일 로드/저장 버튼들 (반응형)
+        # YAML 파일 로드/저장 버튼들
         yaml_frame = ttk.Frame(parent)
         yaml_frame.pack(fill=tk.X, pady=5)
         
@@ -610,7 +575,6 @@ class RobotSimulationGUI:
                 self.dh_entries[i][param_name] = entry
                 self.dh_buttons[i][param_name] = {'dec': dec_btn, 'inc': inc_btn}
         
-        # 스크롤 영역 업데이트
         self.root.after(100, self.update_scroll_region)
 
     def start_dh_button_press(self, link_idx, param_name, step):
@@ -688,7 +652,7 @@ class RobotSimulationGUI:
             # 반응형 관절 프레임
             joint_frame = ttk.Frame(self.joint_input_frame)
             joint_frame.pack(fill=tk.X, pady=1)
-            joint_frame.columnconfigure(2, weight=1)  # 입력 필드 확장
+            joint_frame.columnconfigure(2, weight=1)
             
             ttk.Label(joint_frame, text=f"Joint {i+1}:", width=8).grid(row=0, column=0, sticky="w")
             
@@ -722,7 +686,6 @@ class RobotSimulationGUI:
                                       relief='sunken', anchor='center')
                 angle_label.grid(row=0, column=1, columnspan=3, sticky="ew", padx=2)
         
-        # 스크롤 영역 업데이트
         self.root.after(100, self.update_scroll_region)
     
     def update_target_inputs_visibility(self):
@@ -733,12 +696,11 @@ class RobotSimulationGUI:
             self.ori_frame.pack_forget()
     
     def setup_control_buttons(self, parent):
-        """제어 버튼 설정 (반응형)"""
+        """제어 버튼 설정"""
         # 첫 번째 줄: 주요 기능
         row1 = ttk.Frame(parent)
         row1.pack(fill=tk.X, pady=2)
         
-        # 반응형 버튼 배치
         self.simulation_btn = ttk.Button(row1, text="🎯 Run Simulation", 
                                         command=self.run_goal_oriented_simulation)
         self.simulation_btn.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
@@ -784,10 +746,8 @@ class RobotSimulationGUI:
         self.ax.set_title('Robot Kinematics Simulation')
         self.canvas.draw()
     
-    # ========== 개선된 이벤트 핸들러들 ==========
-    
     def add_status_message(self, message):
-        """상태창 줄간격 문제 완전 해결"""
+        """상태창에 메시지 추가"""
         if self.result_text is not None:
             current_content = self.result_text.get("1.0", tk.END)
             
@@ -918,15 +878,13 @@ class RobotSimulationGUI:
         self.clear_path_visualization()
         self.clear_ik_solutions()
         self.reset_simulation_state()
-        
-        # 개선사항 1: 모드 변경시 상태창도 초기화
         self.clear_status_messages()
         
         self.update_joint_display()
         self.update_robot_display()
     
     def on_dof_change(self, event=None):
-        """DOF 변경 처리 - 개선사항 1 적용"""
+        """DOF 변경 처리"""
         new_dof = self.dof_var.get()
         if new_dof != self.current_dof:
             self.current_dof = new_dof
@@ -940,8 +898,6 @@ class RobotSimulationGUI:
             self.clear_path_visualization()
             self.clear_ik_solutions()
             self.reset_simulation_state()
-            
-            # 개선사항 1: DOF 변경시 상태창 메시지 초기화
             self.clear_status_messages()
             
             self.update_dh_parameter_inputs()
@@ -949,7 +905,6 @@ class RobotSimulationGUI:
             self.update_target_inputs_visibility()
             self.update_robot_display()
             
-            # 스크롤 영역 업데이트
             self.root.after(200, self.update_scroll_region)
     
     def start_button_press(self, joint_idx, direction):
@@ -985,8 +940,6 @@ class RobotSimulationGUI:
             self.update_robot_display()
             
             self.root.after(100, lambda: self.continuous_button_press(joint_idx, direction))
-    
-    # ========== 핵심 계산 및 시각화 기능 ==========
     
     def update_robot_display(self):
         """로봇 표시 업데이트"""
@@ -1092,7 +1045,7 @@ class RobotSimulationGUI:
                 self.result_text.insert(1.0, f"IK 계산 오류: {str(e)}")
     
     def display_ik_results_in_right_panel(self, solutions, target_pos_cm, target_ori):
-        """IK 결과 표시 - 우측 패널에"""
+        """IK 결과 표시"""
         self.ik_solutions = solutions
         
         self.show_ik_solutions()
@@ -1366,8 +1319,6 @@ class RobotSimulationGUI:
         """경로 시각화 초기화"""
         self.current_path = None
         self.trajectory_history = []
-    
-    # ========== 시뮬레이션 기능 (기존 유지) ==========
     
     def run_goal_oriented_simulation(self):
         """목표 지향적 시뮬레이션 실행"""
@@ -1709,8 +1660,6 @@ class RobotSimulationGUI:
         except:
             pass
     
-    # ========== 기타 기능들 ==========
-    
     def load_default_dh_params_for_dof(self, dof):
         """기본 DH 파라미터 로드"""
         self.dh_params = self.dh_manager.get_default_dh_params(dof)
@@ -1748,7 +1697,6 @@ class RobotSimulationGUI:
             self.reset_simulation_state()
             self.update_robot_display()
             
-            # 스크롤 영역 업데이트
             self.root.after(100, self.update_scroll_region)
             
         except Exception as e:
@@ -1770,8 +1718,6 @@ class RobotSimulationGUI:
             self.clear_path_visualization()
             self.clear_ik_solutions()
             self.reset_simulation_state()
-            
-            # 개선사항 1: 초기화시 상태창도 초기화
             self.clear_status_messages()
             
             self.update_dh_parameter_inputs()
@@ -1790,7 +1736,6 @@ class RobotSimulationGUI:
             
             self.update_robot_display()
             
-            # 스크롤 영역 업데이트
             self.root.after(100, self.update_scroll_region)
             
             self.add_status_message("✅ 기본 1DOF 구성으로 초기화되었습니다.")
@@ -1886,8 +1831,6 @@ class RobotSimulationGUI:
                     self.clear_path_visualization()
                     self.clear_ik_solutions()
                     self.reset_simulation_state()
-                    
-                    # 개선사항 1: 파일 로드시 상태창 초기화
                     self.clear_status_messages()
                     
                     self.update_dh_parameter_inputs()
@@ -1904,7 +1847,6 @@ class RobotSimulationGUI:
                     
                     self.update_robot_display()
                     
-                    # 스크롤 영역 업데이트
                     self.root.after(100, self.update_scroll_region)
                     
                     self.add_status_message(f"✅ YAML 파일 로드 완료: {os.path.basename(file_path)}")
@@ -1970,8 +1912,6 @@ class RobotSimulationGUI:
                 self.clear_path_visualization()
                 self.clear_ik_solutions()
                 self.reset_simulation_state()
-                
-                # 개선사항 1: 프리셋 로드시 상태창 초기화
                 self.clear_status_messages()
                 
                 self.update_dh_parameter_inputs()
@@ -1979,7 +1919,6 @@ class RobotSimulationGUI:
                 self.update_target_inputs_visibility()
                 self.update_robot_display()
                 
-                # 스크롤 영역 업데이트
                 self.root.after(100, self.update_scroll_region)
                 
                 self.add_status_message(f"✅ 프리셋 로봇 로드 완료: {preset_name}")
@@ -1996,9 +1935,7 @@ class RobotSimulationGUI:
 def main():
     """메인 함수"""
     print("=" * 80)
-    print("Robot Kinematics Simulation - 스크롤 및 반응형 구조 개선 버전")
-    print("개선사항 1: DOF 변경시 상태창 메시지 초기화")
-    print("개선사항 2: 컨트롤 패널 스크롤 기능 및 반응형 구조")
+    print("Robot Kinematics Simulation")
     print("=" * 80)
     
     folders = ["./yaml", "./results"]
@@ -2010,43 +1947,9 @@ def main():
             print(f"✗ 폴더 생성 오류 {folder}: {e}")
     
     try:
-        print("\n🎯 주요 개선사항:")
-        print("1. ✅ DOF/모드 변경시 상태창 메시지 자동 초기화")
-        print("   - 기존 메시지가 지워지고 새로운 설정에 맞는 메시지 표시")
-        print("   - IK 결과 패널과 동일한 초기화 로직 적용")
-        
-        print("\n2. ✅ 스크롤 가능한 컨트롤 패널")
-        print("   - 세로 스크롤 기능으로 모든 컨트롤 요소 접근 가능")
-        print("   - 마우스 휠 스크롤 지원")
-        print("   - DOF 증가시에도 UI 오버플로우 방지")
-        
-        print("\n3. ✅ 반응형 구조 구현")
-        print("   - 윈도우 크기 조절시 내부 요소들 자동 크기 조정")
-        print("   - PanedWindow 사용으로 패널 크기 조절 가능")
-        print("   - 입력 필드들이 패널 너비에 따라 확장/축소")
-        print("   - 버튼들의 균등 배치로 공간 효율성 향상")
-        
-        print("\n4. ✅ 사용성 개선")
-        print("   - 최소 윈도우 크기 설정 (1400x800)")
-        print("   - 적응적 초기 패널 크기 (윈도우 크기의 30%)")
-        print("   - 텍스트 래핑으로 긴 텍스트 처리")
-        print("   - 스크롤 영역 자동 업데이트")
-        
-        print("\n🔧 기술적 구현:")
-        print("• Canvas + Frame 기반 스크롤 시스템")
-        print("• Grid/Pack 조합으로 반응형 레이아웃")
-        print("• 이벤트 바인딩을 통한 실시간 크기 조정")
-        print("• 상태 관리 개선으로 일관된 UI 동작")
-        
-        print("\n✅ 기존 기능 완전 유지:")
-        print("• 4개 핵심 문제 해결 상태 그대로")
-        print("• IK 결과 우측 표시 기능")
-        print("• 모든 시뮬레이션 및 계산 기능")
-        print("=" * 80)
-        
         root = tk.Tk()
         app = RobotSimulationGUI(root)
-        print("✓ GUI 초기화 완료 (스크롤 및 반응형 구조 개선 버전)")
+        print("✓ GUI 초기화 완료")
         
         root.mainloop()
         
